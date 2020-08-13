@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.10.0)
+project("tensor")
+
+enable_testing()
+find_package(GTest REQUIRED)
+include_directories(${GTEST_INCLUDE_DIRS})
+
+set(CXX_STANDARD 17)
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+set(CMAKE_CXX_FLAGS "-march=native -Wall -Wextra -Werror") 
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
+
+include_directories("/")
+add_executable(tensor_test tensor_test.cpp)
+target_link_libraries(tensor_test ${GTEST_BOTH_LIBRARIES})
+add_test(AllTestsInTensor test_tensor)
