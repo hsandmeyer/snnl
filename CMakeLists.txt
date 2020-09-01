@@ -18,5 +18,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 include_directories("/")
 add_executable(tensor_test tensor_test.cpp)
+add_executable(forward_test forward_test.cpp)
 target_link_libraries(tensor_test ${GTEST_BOTH_LIBRARIES})
 add_test(AllTestsInTensor test_tensor)

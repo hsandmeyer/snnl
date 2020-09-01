@@ -20,11 +20,14 @@ class TTensor {
             throw std::invalid_argument("At least on dimension needed");
         }
 
+        std::cout << "Constructing tensor with ";
         int i = 0;
         for (auto dim_len : dims) {
+            std::cout << dim_len << " ";
             _dims[i] = dim_len;
             i++;
         }
+        std::cout << std::endl;
 
         _strides[_NDims - 1] = 1;
 
@@ -65,7 +68,7 @@ public:
     }
 
     template <int NDims>
-    TTensor(std::array<size_t, NDims> dims)
+    TTensor(const std::array<size_t, NDims> dims)
         : _NDims(NDims), _dims(_NDims), _strides(_NDims)
     {
         fillDims(dims);
