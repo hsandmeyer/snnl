@@ -9,5 +9,13 @@
             },
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug ${workspaceRoot}; make tensor_test",
         },
+        {
+            "label": "make_forward_test",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceRoot}/build"
+            },
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug ${workspaceRoot}; make forward_test",
+        },
     ]
 }

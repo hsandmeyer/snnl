@@ -4,8 +4,14 @@ using namespace snnl;
 
 int main()
 {
-    TLayer<float> input = {10, 1};
+    TNode<float> input = TNode<float>::Default(32, 128);
 
-    TConnector<float> conn = TConnector<float>::TDenseConnector({1, 2});
-    TLayer<float>     out  = conn(input);
+    TLayer<float> encode = TLayer<float>::TDenseLayer(32, input);
+    TNode<float>  out    = encode(input);
+
+    TLayer<float> decode = TLayer<float>::TDenseLayer(128, out);
+
+    out = decode(out);
+
+    input.call();
 };
