@@ -194,6 +194,30 @@ TEST_P(Tensor4DTest, size)
         }
         i++;
     }
+
+    t.rangeAllDims(0, 1, 2);
+
+    for (size_t i = 0; i < t.shape(0); i++) {
+        for (size_t j = 0; j < t.shape(1); j++) {
+            for (size_t k = 0; k < t.shape(2); k++) {
+                for (size_t l = 0; l < t.shape(3); l++) {
+                    ASSERT_EQ(t(i, j, k, l), 1 + i * 2);
+                }
+            }
+        }
+    }
+
+    t.rangeAllDims(2, 5, -2);
+
+    for (size_t i = 0; i < t.shape(0); i++) {
+        for (size_t j = 0; j < t.shape(1); j++) {
+            for (size_t k = 0; k < t.shape(2); k++) {
+                for (size_t l = 0; l < t.shape(3); l++) {
+                    ASSERT_EQ(t(i, j, k, l), 5 - k * 2);
+                }
+            }
+        }
+    }
 }
 
 INSTANTIATE_TEST_SUITE_P(Tensor1DTestAllTests, Tensor1DTest,

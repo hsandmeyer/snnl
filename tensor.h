@@ -1,4 +1,6 @@
+#pragma once
 #include <array>
+#include <functional>
 #include <initializer_list>
 #include <iostream>
 #include <stdexcept>
@@ -55,6 +57,44 @@ class TTensor {
         return j;
     }
 
+    void forEach(std::vector<size_t> &index, int dim,
+                 std::function<TElem(std::vector<size_t> &)> caller)
+    {
+
+        if (dim + 1 < NDims()) {
+            for (size_t i = 0; i < _shape[dim]; ++i) {
+                index[dim] = i;
+                forEach(index, dim + 1, caller);
+            }
+        }
+        else {
+            // Last axis
+            for (size_t i = 0; i < _shape[dim]; ++i) {
+                index[dim]     = i;
+                (*this)(index) = caller(index);
+            }
+        }
+    }
+
+    void forEach(std::vector<size_t> &index, int dim,
+                 std::function<void(std::vector<size_t> &)> caller)
+    {
+
+        if (dim + 1 < NDims()) {
+            for (size_t i = 0; i < _shape[dim]; ++i) {
+                index[dim] = i;
+                forEach(index, dim + 1, caller);
+            }
+        }
+        else {
+            // Last axis
+            for (size_t i = 0; i < _shape[dim]; ++i) {
+                index[dim] = i;
+                caller(index);
+            }
+        }
+    }
+
 public:
     typedef typename TContainer::iterator       iterator;
     typedef typename TContainer::const_iterator const_iterator;
@@ -86,6 +126,28 @@ public:
         : _NDims(shape.size()), _shape(_NDims), _strides(_NDims)
     {
         fillDims(shape);
+    }
+
+    void forEach(std::function<void(std::vector<size_t> &)> func)
+    {
+        std::vector<size_t> index(NDims());
+        forEach(index, 0, func);
+    }
+
+    void modifyForEach(std::function<TElem(std::vector<size_t> &)> func)
+    {
+        std::vector<size_t> index(NDims());
+        forEach(index, 0, func);
+    }
+
+    void rangeAllDims(int axis, TElem start, TElem step)
+    {
+        if (axis < 0) {
+            axis += NDims();
+        }
+        modifyForEach([&](std::vector<size_t> &index) -> TElem {
+            return start + index[axis] * step;
+        });
     }
 
     template <typename TArray>
@@ -132,24 +194,35 @@ public:
 #endif
     }
 
-    size_t shape(const int i) const
+    const TElem &operator()(const std::vector<size_t> &index_vec) const
     {
-        if (i >= 0) {
-            return _shape[i];
-        }
-        else {
-            return _shape[_NDims + i];
-        }
+        return const_cast<TElem &>(
+            (*const_cast<TTensor<TElem> *>(this))(index_vec));
     }
 
-    size_t stride(const int i) const
+    TElem &operator()(const std::vector<size_t> &index_vec)
     {
-        if (i >= 0) {
-            return _strides[i];
+        size_t index = 0;
+        for (size_t i = _strides.size(); i-- > 0;) {
+            index += index_vec[i] * _strides[i];
         }
-        else {
-            return _strides[_NDims + i];
+        return _data[index];
+    }
+
+    size_t shape(int i) const
+    {
+        if (i < 0) {
+            i += NDims();
         }
+        return _shape[i];
+    }
+
+    size_t stride(int i) const
+    {
+        if (i < 0) {
+            i += NDims();
+        }
+        return _strides[i];
     }
 
     std::vector<size_t> &shape() { return _shape; }
@@ -158,9 +231,17 @@ public:
 
     std::vector<size_t> subShape(int first, int last) const
     {
+        if (first < 0) {
+            first += NDims();
+        }
+        if (last < 0) {
+            last += NDims();
+        }
         return std::vector<size_t>(_shape.begin() + first,
                                    _shape.begin() + first + last);
     }
+
+    void setAllValues(TElem value) { std::fill(begin(), end(), value); }
 
     auto begin() { return _data.begin(); }
 
