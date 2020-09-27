@@ -101,29 +101,13 @@ public:
 
     TTensor() : _NDims(0) {}
 
-    TTensor(const std::initializer_list<size_t> shape)
-        : _NDims(shape.size()), _shape(_NDims), _strides(_NDims)
-    {
-        fillDims(shape);
-    }
-
-    template <size_t NDims>
-    TTensor(const std::array<size_t, NDims> &shape)
-        : _NDims(NDims), _shape(_NDims), _strides(_NDims)
-    {
-        fillDims(shape);
-    }
-
-    template <int NDims>
-    TTensor(const std::array<size_t, NDims> &shape)
-        : _NDims(NDims), _shape(_NDims), _strides(_NDims)
+    TTensor(const std::initializer_list<size_t> shape) : _NDims(shape.size())
     {
         fillDims(shape);
     }
 
     template <typename TArray>
-    TTensor(const TArray &shape)
-        : _NDims(shape.size()), _shape(_NDims), _strides(_NDims)
+    TTensor(const TArray &shape) : _NDims(shape.size())
     {
         fillDims(shape);
     }
@@ -155,6 +139,11 @@ public:
     {
         _NDims = arr.size();
         fillDims(arr);
+    }
+    void setDims(const std::initializer_list<size_t> shape)
+    {
+        _NDims = shape.size();
+        fillDims(shape);
     }
 
     void addDim(const size_t dim_len)

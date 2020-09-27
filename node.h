@@ -20,10 +20,10 @@ class TNodeBaseImpl {
     TLayerBaseImpl<TElem> *                             _prev_layer  = nullptr;
 
 protected:
-    virtual void
-    connectNextLayerHandler(std::shared_ptr<TLayerBaseImpl<TElem>> &) = 0;
-    virtual void
-                 connectPrevLayerHandler(std::shared_ptr<TLayerBaseImpl<TElem>> &) = 0;
+    virtual void connectNextLayerHandler(TLayerBaseImpl<TElem> &) = 0;
+
+    virtual void connectPrevLayerHandler(TLayerBaseImpl<TElem> &) = 0;
+
     virtual void callHandler() = 0;
 
 public:
@@ -52,23 +52,20 @@ public:
         return _values(args...);
     }
 
-    int NDims() const { return _values.NDims() - 1; }
-
-    size_t shape(const int i) const { return _values.shape(i); }
-
-    std::vector<size_t> shape() const { return _values.shape(); }
-
     virtual ~TNodeBaseImpl()
     {
 
         std::cout << "Destroying TNodeBase" << std::endl;
     }
 
-    auto &prevLayer() { return _prev_layer; }
+    TLayerBaseImpl<TElem> &prevLayer() { return _prev_layer; }
 
-    auto &nextLayers() { return _next_layers; }
+    TLayerBaseImpl<TElem> &nextLayers() { return _next_layers; }
 
-    TTensor<TElem> &getTensor() { return _values; }
+    TLayerBaseImpl<TElem> &nextLayer(const size_t i)
+    {
+        return _next_layers.at(i);
+    }
 
     void call()
     {
@@ -80,7 +77,7 @@ public:
     void connectNextLayer(std::shared_ptr<TLayerBaseImpl<TElem>> &next)
     {
         _next_layers.push_back(next);
-        connectNextLayerHandler(next);
+        connectNextLayerHandler(*next);
     }
 
     void connectPrevLayer(std::shared_ptr<TLayerBaseImpl<TElem>> &prev)
@@ -90,31 +87,30 @@ public:
                 "Node already connected to a previous layer");
         }
         _prev_layer = prev.get();
-        connectPrevLayerHandler(prev);
+        connectPrevLayerHandler(*prev);
     }
 
-    void setAllValues(TElem value) { _values.setAllValues(value); }
+    TTensor<TElem> *operator->() { return &_values; }
 
-    std::vector<size_t> subShape(int first, int last) const
-    {
-        return _values.subShape(first, last);
-    }
+    const TTensor<TElem> *operator->() const { return &_values; }
 
-    int NDims() { return _values.NDims(); }
-}; // namespace snnl
+    TTensor<TElem> &values() { return _values; }
+
+    size_t shape(int i) const { return _values.shape(i); }
+
+    std::vector<size_t> &shape() { return _values.shape(); }
+
+    const std::vector<size_t> &shape() const { return _values.shape(); }
+};
 
 template <class TElem>
 class TDefaultNodeImpl : public TNodeBaseImpl<TElem> {
 
 protected:
-    virtual void
-    connectNextLayerHandler(std::shared_ptr<TLayerBaseImpl<TElem>> &)
-    {
-    }
-    virtual void
-    connectPrevLayerHandler(std::shared_ptr<TLayerBaseImpl<TElem>> &)
-    {
-    }
+    virtual void connectNextLayerHandler(TLayerBaseImpl<TElem> &) {}
+
+    virtual void connectPrevLayerHandler(TLayerBaseImpl<TElem> &) {}
+
     virtual void callHandler() {}
 
 public:
@@ -168,16 +164,6 @@ public:
         prev._impl->connectNextNode(_impl);
     }
 
-    std::vector<size_t> shape() const { return _impl->shape(); }
-
-    size_t shape(const int i) const { return _impl->shape(i); }
-
-    TTensor<TElem> &getTensor() { return _impl->getTensor(); }
-
-    void call() { _impl->call(); }
-
-    TNode Default() {}
-
     template <typename... TArgs>
     static TNode Default(TArgs... args)
     {
@@ -189,8 +175,8 @@ public:
         return TNode(std::make_shared<TDefaultNodeImpl<TElem>>(list));
     }
 
-    void setAllValues(TElem value) { _impl->setAllValues(value); }
+    TNodeBaseImpl<TElem> *operator->() { return _impl.get(); }
 
-    int NDims() { return _impl->NDims(); }
+    const TNodeBaseImpl<TElem> *operator->() const { return _impl.get(); }
 };
 } // namespace snnl
