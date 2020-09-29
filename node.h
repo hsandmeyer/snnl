@@ -98,9 +98,9 @@ public:
 
     size_t shape(int i) const { return _values.shape(i); }
 
-    std::vector<size_t> &shape() { return _values.shape(); }
+    TIndex &shape() { return _values.shape(); }
 
-    const std::vector<size_t> &shape() const { return _values.shape(); }
+    const TIndex &shape() const { return _values.shape(); }
 };
 
 template <class TElem>

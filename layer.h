@@ -28,11 +28,12 @@ protected:
     virtual void connectPrevNodeHandler(TNodeBaseImpl<TElem> &prev_node) = 0;
 
 public:
-    virtual TNode<TElem> createOutputNode(std::vector<TNode<TElem>> &) = 0;
+    virtual TNode<TElem>
+    createOutputNode(std::vector<TNode<TElem>> &) const = 0;
 
     virtual void callHandler() = 0;
 
-    virtual void buildHandler(std::vector<size_t> &input_shape) = 0;
+    virtual void buildHandler(TIndex &input_shape) = 0;
 
     virtual void updateWeights() = 0;
 
@@ -69,7 +70,7 @@ public:
         }
     }
 
-    void build(std::vector<size_t> &input_shape)
+    void build(TIndex &input_shape)
     {
         if (!_was_build) {
             buildHandler(input_shape);
@@ -119,21 +120,21 @@ class TDenseLayerImpl : public TLayerBaseImpl<TElem> {
     size_t         _output_units;
     size_t         _input_units;
 
-    TNode<TElem> createOutputNode(std::vector<TNode<TElem>> &nodes)
+    TNode<TElem> createOutputNode(std::vector<TNode<TElem>> &nodes) const
     {
         if (nodes.size() > 1) {
             throw std::invalid_argument(
                 "Maximal one node per call for Dense layer");
         }
 
-        auto shape              = nodes[0]->values().subShape(1, -1);
-        shape[shape.size() - 1] = _bias.shape(-1);
+        TIndex shape = nodes[0]->values().subShape(1, -1);
+        shape[-1]    = _bias.shape(-1);
         return TNode<TElem>::Default(shape);
     }
 
-    virtual void buildHandler(std::vector<size_t> &input_shape)
+    virtual void buildHandler(TIndex &input_shape)
     {
-        _input_units = input_shape[input_shape.size() - 1];
+        _input_units = input_shape[-1];
         _weights.setDims({_output_units, _input_units});
         _bias.setDims({_output_units});
         this->registerWeights(_weights, _bias);

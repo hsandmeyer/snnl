@@ -34,9 +34,9 @@ TEST_P(OneDenseLayerTest, input_shape)
 
     input->call();
 
-    out->values().forEach([&](std::vector<size_t> &index) {
+    out->values().forEach([&](TIndex &index) {
         if (!this->HasFatalFailure()) {
-            ASSERT_FLOAT_EQ(out(index), 1 + 2 * index[index.size() - 1]);
+            ASSERT_FLOAT_EQ(out(index), 1 + 2 * index[-1]);
         }
     });
 }
@@ -62,7 +62,7 @@ TEST_P(MultiDenseLayerTest, input_shape)
 
     input.get()->call();
 
-    out->values().forEach([&](std::vector<size_t> &index) {
+    out->values().forEach([&](TIndex &index) {
         if (!this->HasFatalFailure()) {
             ASSERT_FLOAT_EQ(decode->weights(0).shape(1) *
                                     (encode->weights(0).shape(1) + 1) +

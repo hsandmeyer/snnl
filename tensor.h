@@ -1,4 +1,5 @@
 #pragma once
+#include "index.h"
 #include <array>
 #include <functional>
 #include <initializer_list>
@@ -7,19 +8,19 @@
 #include <vector>
 
 namespace snnl {
-template <class TElem, class TContainer = std::vector<TElem>>
+template <class TElem>
 class TTensor {
 
-    int                 _NDims;
-    std::vector<size_t> _shape;
-    std::vector<size_t> _strides;
-    TContainer          _data = {};
+    int                _NDims;
+    TIndex             _shape;
+    TIndex             _strides;
+    std::vector<TElem> _data = {};
 
     template <typename TArray>
     void fillDims(const TArray &shape)
     {
         std::cout << "Constructing tensor with ";
-        _shape.resize(_NDims);
+        _shape.setNDims(_NDims);
 
         int i = 0;
         for (auto dim_len : shape) {
@@ -34,7 +35,7 @@ class TTensor {
 
     void fillStrides()
     {
-        _strides.resize(_NDims);
+        _strides.setNDims(_NDims);
         _strides[_NDims - 1] = 1;
 
         for (int i = _NDims - 2; i >= 0; --i) {
@@ -47,7 +48,7 @@ class TTensor {
     template <size_t N, typename... Ts>
     size_t dataOffset(size_t i, Ts... im)
     {
-        return i * _strides[_strides.size() - sizeof...(Ts) - 1] +
+        return i * _strides[_strides.NDims() - sizeof...(Ts) - 1] +
                dataOffset<N + 1>(im...);
     }
 
@@ -57,8 +58,7 @@ class TTensor {
         return j;
     }
 
-    void forEach(std::vector<size_t> &index, int dim,
-                 std::function<TElem(std::vector<size_t> &)> caller)
+    void forEach(TIndex &index, int dim, std::function<TElem(TIndex &)> caller)
     {
 
         if (dim + 1 < NDims()) {
@@ -76,8 +76,7 @@ class TTensor {
         }
     }
 
-    void forEach(std::vector<size_t> &index, int dim,
-                 std::function<void(std::vector<size_t> &)> caller)
+    void forEach(TIndex &index, int dim, std::function<void(TIndex &)> caller)
     {
 
         if (dim + 1 < NDims()) {
@@ -96,8 +95,8 @@ class TTensor {
     }
 
 public:
-    typedef typename TContainer::iterator       iterator;
-    typedef typename TContainer::const_iterator const_iterator;
+    typedef typename std::vector<TElem>::iterator       iterator;
+    typedef typename std::vector<TElem>::const_iterator const_iterator;
 
     TTensor() : _NDims(0) {}
 
@@ -112,15 +111,15 @@ public:
         fillDims(shape);
     }
 
-    void forEach(std::function<void(std::vector<size_t> &)> func)
+    void forEach(std::function<void(TIndex &)> func)
     {
-        std::vector<size_t> index(NDims());
+        TIndex index(NDims());
         forEach(index, 0, func);
     }
 
-    void modifyForEach(std::function<TElem(std::vector<size_t> &)> func)
+    void modifyForEach(std::function<TElem(TIndex &)> func)
     {
-        std::vector<size_t> index(NDims());
+        TIndex index(NDims());
         forEach(index, 0, func);
     }
 
@@ -129,9 +128,8 @@ public:
         if (axis < 0) {
             axis += NDims();
         }
-        modifyForEach([&](std::vector<size_t> &index) -> TElem {
-            return start + index[axis] * step;
-        });
+        modifyForEach(
+            [&](TIndex &index) -> TElem { return start + index[axis] * step; });
     }
 
     template <typename TArray>
@@ -149,8 +147,8 @@ public:
     void addDim(const size_t dim_len)
     {
         _NDims++;
-        _shape.push_back(dim_len);
-        _strides.push_back(0);
+        _shape.addDim(dim_len);
+        _strides.addDim(0);
 
         fillStrides();
     }
@@ -183,16 +181,16 @@ public:
 #endif
     }
 
-    const TElem &operator()(const std::vector<size_t> &index_vec) const
+    const TElem &operator()(const TIndex &index_vec) const
     {
         return const_cast<TElem &>(
             (*const_cast<TTensor<TElem> *>(this))(index_vec));
     }
 
-    TElem &operator()(const std::vector<size_t> &index_vec)
+    TElem &operator()(const TIndex &index_vec)
     {
         size_t index = 0;
-        for (size_t i = _strides.size(); i-- > 0;) {
+        for (size_t i = _strides.NDims(); i-- > 0;) {
             index += index_vec[i] * _strides[i];
         }
         return _data[index];
@@ -214,11 +212,11 @@ public:
         return _strides[i];
     }
 
-    std::vector<size_t> &shape() { return _shape; }
+    TIndex &shape() { return _shape; }
 
-    const std::vector<size_t> &shape() const { return _shape; }
+    const TIndex &shape() const { return _shape; }
 
-    std::vector<size_t> subShape(int first, int last) const
+    TIndex subShape(int first, int last) const
     {
         if (first < 0) {
             first += NDims();
@@ -226,8 +224,7 @@ public:
         if (last < 0) {
             last += NDims();
         }
-        return std::vector<size_t>(_shape.begin() + first,
-                                   _shape.begin() + first + last);
+        return TIndex(_shape.cbegin() + first, _shape.cbegin() + first + last);
     }
 
     void setAllValues(TElem value) { std::fill(begin(), end(), value); }
