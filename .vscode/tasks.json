@@ -17,5 +17,13 @@
             },
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug ${workspaceRoot}; make forward_test",
         },
+        {
+            "label": "make_backward_test",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceRoot}/build"
+            },
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug ${workspaceRoot}; make backward_test",
+        },
     ]
 }

@@ -12,27 +12,26 @@ class TNodeBaseImpl {
     friend class TLayer<TElem>;
     friend class TLayerBaseImpl<TElem>;
 
-    size_t _batch_size = 1;
-
     TTensor<TElem> _values;
+    TTensor<TElem> _gradients;
 
     std::vector<std::shared_ptr<TLayerBaseImpl<TElem>>> _next_layers = {};
-    TLayerBaseImpl<TElem> *                             _prev_layer  = nullptr;
+    TLayerBaseImpl<TElem>*                              _prev_layer  = nullptr;
 
 protected:
-    virtual void connectNextLayerHandler(TLayerBaseImpl<TElem> &) = 0;
+    virtual void connectNextLayerHandler(TLayerBaseImpl<TElem>&) = 0;
 
-    virtual void connectPrevLayerHandler(TLayerBaseImpl<TElem> &) = 0;
+    virtual void connectPrevLayerHandler(TLayerBaseImpl<TElem>&) = 0;
 
     virtual void callHandler() = 0;
 
 public:
+    TNodeBaseImpl() = default;
+
     template <typename TArray>
     TNodeBaseImpl(TArray shape)
     {
-        std::vector<size_t> full_dims{_batch_size};
-        full_dims.insert(full_dims.end(), shape.begin(), shape.end());
-        _values.setDims(full_dims);
+        setDims(shape);
     }
 
     TNodeBaseImpl(const std::initializer_list<size_t> shape)
@@ -41,15 +40,27 @@ public:
     }
 
     template <typename... Args>
-    TElem &operator()(const Args... args)
+    TElem& value(const Args... args)
     {
         return _values(args...);
     }
 
     template <typename... Args>
-    const TElem &operator()(const Args... args) const
+    const TElem& value(const Args... args) const
     {
         return _values(args...);
+    }
+
+    template <typename... Args>
+    const TElem& delta(const Args... args) const
+    {
+        return _deltas(args...);
+    }
+
+    template <typename... Args>
+    TElem& delta(const Args... args)
+    {
+        return _deltas(args...);
     }
 
     virtual ~TNodeBaseImpl()
@@ -58,29 +69,38 @@ public:
         std::cout << "Destroying TNodeBase" << std::endl;
     }
 
-    TLayerBaseImpl<TElem> &prevLayer() { return _prev_layer; }
+    TLayerBaseImpl<TElem>& prevLayer() { return _prev_layer; }
 
-    TLayerBaseImpl<TElem> &nextLayers() { return _next_layers; }
+    auto& nextLayers() { return _next_layers; }
 
-    TLayerBaseImpl<TElem> &nextLayer(const size_t i)
+    TLayerBaseImpl<TElem>& nextLayer(const size_t i)
     {
         return _next_layers.at(i);
     }
 
     void call()
     {
-        for (auto &layer : _next_layers) {
+        for (auto& layer : _next_layers) {
             layer->call();
         }
     }
 
-    void connectNextLayer(std::shared_ptr<TLayerBaseImpl<TElem>> &next)
+    void backCall()
+    {
+        if (_prev_layer) {
+            // TODO: calculate deltas here
+
+            _prev_layer->backCall();
+        }
+    }
+
+    void connectNextLayer(std::shared_ptr<TLayerBaseImpl<TElem>>& next)
     {
         _next_layers.push_back(next);
         connectNextLayerHandler(*next);
     }
 
-    void connectPrevLayer(std::shared_ptr<TLayerBaseImpl<TElem>> &prev)
+    void connectPrevLayer(std::shared_ptr<TLayerBaseImpl<TElem>>& prev)
     {
         if (_prev_layer) {
             throw std::invalid_argument(
@@ -90,37 +110,54 @@ public:
         connectPrevLayerHandler(*prev);
     }
 
-    TTensor<TElem> *operator->() { return &_values; }
+    // TTensor<TElem>* operator->() { return &_values; }
 
-    const TTensor<TElem> *operator->() const { return &_values; }
+    // const TTensor<TElem>* operator->() const { return &_values; }
 
-    TTensor<TElem> &values() { return _values; }
+    TTensor<TElem>& values() { return _values; }
+
+    TTensor<TElem>& gradients() { return _gradients; }
 
     size_t shape(int i) const { return _values.shape(i); }
 
-    TIndex &shape() { return _values.shape(); }
+    TIndex shape() { return _values.shape(); }
 
-    const TIndex &shape() const { return _values.shape(); }
+    const TIndex shape() const { return _values.shape(); }
+
+    template <typename TArray>
+    void setDims(const TArray& arr)
+    {
+        _values.setDims(arr);
+        _gradients.setDims(arr);
+    }
+
+    void setDims(const std::initializer_list<size_t> shape)
+    {
+        _values.setDims(shape);
+        _gradients.setDims(shape);
+    }
 };
 
 template <class TElem>
 class TDefaultNodeImpl : public TNodeBaseImpl<TElem> {
 
 protected:
-    virtual void connectNextLayerHandler(TLayerBaseImpl<TElem> &) {}
+    virtual void connectNextLayerHandler(TLayerBaseImpl<TElem>&) {}
 
-    virtual void connectPrevLayerHandler(TLayerBaseImpl<TElem> &) {}
+    virtual void connectPrevLayerHandler(TLayerBaseImpl<TElem>&) {}
 
     virtual void callHandler() {}
 
 public:
+    TDefaultNodeImpl() = default;
+
     template <typename TArray>
-    TDefaultNodeImpl(TArray shape) : TNodeBaseImpl<TElem>(shape)
+    TDefaultNodeImpl(TArray& shape) : TNodeBaseImpl<TElem>(shape)
     {
     }
 
     template <typename TArray>
-    TDefaultNodeImpl(const std::initializer_list<size_t> shape)
+    TDefaultNodeImpl(const std::initializer_list<size_t>& shape)
         : TNodeBaseImpl<TElem>(shape)
     {
     }
@@ -136,29 +173,45 @@ class TNode {
     std::shared_ptr<TNodeBaseImpl<TElem>> _impl;
 
 public:
-    TNode(const std::shared_ptr<TNodeBaseImpl<TElem>> &impl) : _impl(impl) {}
+    TNode(const std::shared_ptr<TNodeBaseImpl<TElem>>& impl) : _impl(impl) {}
 
     template <typename... Args>
-    TElem &operator()(const Args... args)
+    TElem& value(const Args... args)
     {
-        return (*_impl)(args...);
+        return _impl->value(args...);
     }
 
     template <typename... Args>
-    const TElem &operator()(const Args &&... args) const
+    const TElem& value(const Args&&... args) const
     {
-        return (*_impl)(std::forward(args...));
+        return _impl->value(std::forward(args...));
     }
 
-    TNodeBaseImpl<TElem> *get() { return _impl.get(); }
+    TTensor<TElem>& values() { return _impl->_values; }
 
-    void connectNextLayer(TLayerBaseImpl<TElem> &next)
+    const TTensor<TElem>& values() const { return _impl->_values; }
+
+    template <typename... Args>
+    TElem& grad(const Args... args)
+    {
+        return _impl->grad(args...);
+    }
+
+    template <typename... Args>
+    const TElem& grad(const Args&&... args) const
+    {
+        return _impl->grad(std::forward(args...));
+    }
+
+    TNodeBaseImpl<TElem>* get() { return _impl.get(); }
+
+    void connectNextLayer(TLayerBaseImpl<TElem>& next)
     {
         _impl->connectNextLayer(next);
         next._impl->connectPrevNode(_impl);
     }
 
-    void connectPrevLayer(TLayer<TElem> &prev)
+    void connectPrevLayer(TLayer<TElem>& prev)
     {
         _impl->connectPrevLayer(prev._impl);
         prev._impl->connectNextNode(_impl);
@@ -175,8 +228,19 @@ public:
         return TNode(std::make_shared<TDefaultNodeImpl<TElem>>(list));
     }
 
-    TNodeBaseImpl<TElem> *operator->() { return _impl.get(); }
+    TNodeBaseImpl<TElem>* operator->() { return _impl.get(); }
 
-    const TNodeBaseImpl<TElem> *operator->() const { return _impl.get(); }
+    const TNodeBaseImpl<TElem>* operator->() const { return _impl.get(); }
+
+    template <typename TArray>
+    void setDims(const TArray& arr)
+    {
+        _impl->setDims(arr);
+    }
+
+    void setDims(const std::initializer_list<size_t> shape)
+    {
+        _impl->setDims(shape);
+    }
 };
 } // namespace snnl

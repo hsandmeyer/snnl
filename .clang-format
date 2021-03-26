@@ -6,3 +6,7 @@ AlignConsecutiveAssignments: true
 AlignEscapedNewlines: Right
 AlignConsecutiveDeclarations: true
 AlwaysBreakTemplateDeclarations: true
+DerivePointerBinding: false
+PointerBindsToType: false
+DerivePointerAlignment: false
+PointerAlignment: Left

@@ -7,14 +7,14 @@ class TIndex {
 public:
     template <typename Integer,
               std::enable_if_t<std::is_unsigned<Integer>::value, int> = 0>
-    size_t &operator[](Integer i)
+    size_t& operator[](Integer i)
     {
         return _shape[i];
     }
 
     template <typename Integer,
               std::enable_if_t<std::is_signed<Integer>::value, int> = 0>
-    size_t &operator[](Integer i)
+    size_t& operator[](Integer i)
     {
         if (i < 0) {
             return _shape[_shape.size() + i];
@@ -24,14 +24,14 @@ public:
 
     template <typename Integer,
               std::enable_if_t<std::is_unsigned<Integer>::value, int> = 0>
-    const size_t &operator[](Integer i) const
+    const size_t& operator[](Integer i) const
     {
         return _shape[i];
     }
 
     template <typename Integer,
               std::enable_if_t<std::is_signed<Integer>::value, int> = 0>
-    const size_t &operator[](Integer i) const
+    const size_t& operator[](Integer i) const
     {
         if (i < 0) {
             return _shape[_shape.size() + i];
@@ -42,21 +42,25 @@ public:
     TIndex(std::initializer_list<size_t> list) : _shape(list) {}
 
     template <typename... TArgs>
-    TIndex(TArgs &&... args) : _shape(std::forward<TArgs>(args)...)
+    TIndex(TArgs&&... args) : _shape(std::forward<TArgs>(args)...)
     {
     }
 
     TIndex() = default;
 
-    TIndex(TIndex &) = default;
+    TIndex(TIndex&) = default;
 
-    TIndex(const TIndex &) = default;
+    TIndex(const TIndex&) = default;
 
-    TIndex(TIndex &&) = default;
+    TIndex(TIndex&&) = default;
 
     auto begin() { return _shape.begin(); }
 
     auto end() { return _shape.end(); }
+
+    auto begin() const { return _shape.begin(); }
+
+    auto end() const { return _shape.end(); }
 
     auto cbegin() const { return _shape.cbegin(); }
 
@@ -65,6 +69,8 @@ public:
     auto rbegin() const { return _shape.rbegin(); }
 
     auto rend() const { return _shape.rend(); }
+
+    auto size() const { return _shape.size(); }
 
     void addDim(size_t i) { _shape.push_back(i); }
 

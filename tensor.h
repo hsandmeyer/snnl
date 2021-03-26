@@ -17,7 +17,7 @@ class TTensor {
     std::vector<TElem> _data = {};
 
     template <typename TArray>
-    void fillDims(const TArray &shape)
+    void fillDims(const TArray& shape)
     {
         std::cout << "Constructing tensor with ";
         _shape.setNDims(_NDims);
@@ -58,7 +58,7 @@ class TTensor {
         return j;
     }
 
-    void forEach(TIndex &index, int dim, std::function<TElem(TIndex &)> caller)
+    void forEach(TIndex& index, int dim, std::function<TElem(TIndex&)> caller)
     {
 
         if (dim + 1 < NDims()) {
@@ -76,7 +76,7 @@ class TTensor {
         }
     }
 
-    void forEach(TIndex &index, int dim, std::function<void(TIndex &)> caller)
+    void forEach(TIndex& index, int dim, std::function<void(TIndex&)> caller)
     {
 
         if (dim + 1 < NDims()) {
@@ -106,18 +106,18 @@ public:
     }
 
     template <typename TArray>
-    TTensor(const TArray &shape) : _NDims(shape.size())
+    TTensor(const TArray& shape) : _NDims(shape.size())
     {
         fillDims(shape);
     }
 
-    void forEach(std::function<void(TIndex &)> func)
+    void forEach(std::function<void(TIndex&)> func)
     {
         TIndex index(NDims());
         forEach(index, 0, func);
     }
 
-    void modifyForEach(std::function<TElem(TIndex &)> func)
+    void modifyForEach(std::function<TElem(TIndex&)> func)
     {
         TIndex index(NDims());
         forEach(index, 0, func);
@@ -129,11 +129,11 @@ public:
             axis += NDims();
         }
         modifyForEach(
-            [&](TIndex &index) -> TElem { return start + index[axis] * step; });
+            [&](TIndex& index) -> TElem { return start + index[axis] * step; });
     }
 
     template <typename TArray>
-    void setDims(const TArray &arr)
+    void setDims(const TArray& arr)
     {
         _NDims = arr.size();
         fillDims(arr);
@@ -159,10 +159,22 @@ public:
 
     // Length of axis i, if all following axis ( > i) are flattened
     // into i
-    size_t shapeFlattened(const int i) { return NElems() / stride(i); }
+    size_t shapeFlattened(int i)
+    {
+
+        if (i < 0) {
+            i += NDims();
+        }
+
+        if (i >= NDims() || i < 0) {
+            return 1;
+        }
+
+        return NElems() / stride(i);
+    }
 
     template <typename... T>
-    TElem &operator()(T... indices)
+    TElem& operator()(T... indices)
     {
 #ifdef DEBUG
         return _data.at(dataOffset<0>(indices...));
@@ -172,7 +184,7 @@ public:
     }
 
     template <typename... T>
-    const TElem &operator()(T... indices) const
+    const TElem& operator()(T... indices) const
     {
 #ifdef DEBUG
         return _data.at(dataOffset<0>(indices...));
@@ -181,13 +193,13 @@ public:
 #endif
     }
 
-    const TElem &operator()(const TIndex &index_vec) const
+    const TElem& operator()(const TIndex& index_vec) const
     {
-        return const_cast<TElem &>(
-            (*const_cast<TTensor<TElem> *>(this))(index_vec));
+        return const_cast<TElem&>(
+            (*const_cast<TTensor<TElem>*>(this))(index_vec));
     }
 
-    TElem &operator()(const TIndex &index_vec)
+    TElem& operator()(const TIndex& index_vec)
     {
         size_t index = 0;
         for (size_t i = _strides.NDims(); i-- > 0;) {
@@ -201,6 +213,15 @@ public:
         if (i < 0) {
             i += NDims();
         }
+
+#ifdef DEBUG
+
+        if (i < 0 || i >= static_cast<int>(_shape.size())) {
+            throw std::out_of_range(std::string(
+                "Shape: Index " + std::to_string(i) + " is out of range"));
+        }
+#endif
+
         return _shape[i];
     }
 
@@ -209,12 +230,19 @@ public:
         if (i < 0) {
             i += NDims();
         }
+#ifdef DEBUG
+
+        if (i < 0 || i >= static_cast<int>(_strides.size())) {
+            throw std::out_of_range(std::string(
+                "stride: Index " + std::to_string(i) + " is out of range"));
+        }
+#endif
         return _strides[i];
     }
 
-    TIndex &shape() { return _shape; }
+    TIndex& shape() { return _shape; }
 
-    const TIndex &shape() const { return _shape; }
+    const TIndex& shape() const { return _shape; }
 
     TIndex subShape(int first, int last) const
     {

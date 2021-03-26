@@ -19,24 +19,24 @@ TEST_P(OneDenseLayerTest, input_shape)
 
     input->values().rangeAllDims(-1, 0, 2);
 
-    TLayer<float> encode = TLayer<float>::TDenseLayer(32);
+    TLayer<float> encode = TLayer<float>::TDenseLayer(shape.back(), 32ul);
     TNode<float>  out    = encode(input);
 
-    auto &weights = encode->weights(0);
+    auto& weights = encode->weights(0);
     weights.setAllValues(0);
 
     for (size_t i = 0; i < std::min(weights.shape(0), weights.shape(1)); i++) {
         weights(i, i) = 1;
     }
 
-    auto &bias = encode->weights(1);
+    auto& bias = encode->weights(1);
     bias.setAllValues(1);
 
     input->call();
 
-    out->values().forEach([&](TIndex &index) {
+    out->values().forEach([&](TIndex& index) {
         if (!this->HasFatalFailure()) {
-            ASSERT_FLOAT_EQ(out(index), 1 + 2 * index[-1]);
+            ASSERT_FLOAT_EQ(out.value(index), 1 + 2 * index[-1]);
         }
     });
 }
@@ -46,8 +46,8 @@ TEST_P(MultiDenseLayerTest, input_shape)
     auto shape = GetParam();
 
     TNode<float>  input  = TNode<float>::Default(shape);
-    TLayer<float> encode = TLayer<float>::TDenseLayer(32);
-    TLayer<float> decode = TLayer<float>::TDenseLayer(128);
+    TLayer<float> encode = TLayer<float>::TDenseLayer(shape.back(), 32ul);
+    TLayer<float> decode = TLayer<float>::TDenseLayer(32ul, 128ul);
 
     TNode<float> out = encode(input);
     out              = decode(out);
@@ -62,12 +62,12 @@ TEST_P(MultiDenseLayerTest, input_shape)
 
     input.get()->call();
 
-    out->values().forEach([&](TIndex &index) {
+    out->values().forEach([&](TIndex& index) {
         if (!this->HasFatalFailure()) {
             ASSERT_FLOAT_EQ(decode->weights(0).shape(1) *
                                     (encode->weights(0).shape(1) + 1) +
                                 1,
-                            out(index));
+                            out.value(index));
         }
     });
 }
@@ -84,7 +84,7 @@ INSTANTIATE_TEST_SUITE_P(MultiDenseLayerTestAllTests, MultiDenseLayerTest,
                                            std::vector<size_t>{128, 128},
                                            std::vector<size_t>{32, 128, 32}));
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

@@ -53,6 +53,31 @@
                 }
             ],
             "preLaunchTask": "make_forward_test"
+        },
+        {
+            "name": "Backward test",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "build/backward_test",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Enable break on all-exceptions",
+                    "text": "catch throw",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "make_backward_test"
         }
     ]
 }
