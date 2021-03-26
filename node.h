@@ -9,21 +9,24 @@ template <class TElem>
 class TNodeBaseImpl {
 
     friend class TNode<TElem>;
-    friend class TLayer<TElem>;
-    friend class TLayerBaseImpl<TElem>;
+    friend class TConnector<TElem>;
+    friend class TConnectorBaseImpl<TElem>;
 
     TTensor<TElem> _values;
-    TTensor<TElem> _gradients;
+    TTensor<TElem> _gradient;
 
-    std::vector<std::shared_ptr<TLayerBaseImpl<TElem>>> _next_layers = {};
-    TLayerBaseImpl<TElem>*                              _prev_layer  = nullptr;
+    std::vector<std::shared_ptr<TConnectorBaseImpl<TElem>>> _next_connectors =
+        {};
+    TConnectorBaseImpl<TElem>* _prev_connector = nullptr;
 
 protected:
-    virtual void connectNextLayerHandler(TLayerBaseImpl<TElem>&) = 0;
+    virtual void connectNextConnectorHandler(TConnectorBaseImpl<TElem>&){};
 
-    virtual void connectPrevLayerHandler(TLayerBaseImpl<TElem>&) = 0;
+    virtual void connectPrevConnectorHandler(TConnectorBaseImpl<TElem>&){};
 
-    virtual void callHandler() = 0;
+    virtual void forwardHandler(){};
+
+    virtual void backwardHandler(){};
 
 public:
     TNodeBaseImpl() = default;
@@ -52,15 +55,15 @@ public:
     }
 
     template <typename... Args>
-    const TElem& delta(const Args... args) const
+    const TElem& grad(const Args... args) const
     {
-        return _deltas(args...);
+        return _gradient(args...);
     }
 
     template <typename... Args>
-    TElem& delta(const Args... args)
+    TElem& grad(const Args... args)
     {
-        return _deltas(args...);
+        return _gradient(args...);
     }
 
     virtual ~TNodeBaseImpl()
@@ -69,54 +72,50 @@ public:
         std::cout << "Destroying TNodeBase" << std::endl;
     }
 
-    TLayerBaseImpl<TElem>& prevLayer() { return _prev_layer; }
+    TConnectorBaseImpl<TElem>& prevConnector() { return _prev_connector; }
 
-    auto& nextLayers() { return _next_layers; }
+    auto& nextConnectors() { return _next_connectors; }
 
-    TLayerBaseImpl<TElem>& nextLayer(const size_t i)
+    TConnectorBaseImpl<TElem>& nextConnector(const size_t i)
     {
-        return _next_layers.at(i);
+        return _next_connectors.at(i);
     }
 
-    void call()
+    void forward()
     {
-        for (auto& layer : _next_layers) {
-            layer->call();
+        for (auto& connector : _next_connectors) {
+            connector->forward();
         }
     }
 
-    void backCall()
+    void backward()
     {
-        if (_prev_layer) {
+        if (_prev_connector) {
             // TODO: calculate deltas here
 
-            _prev_layer->backCall();
+            _prev_connector->backward();
         }
     }
 
-    void connectNextLayer(std::shared_ptr<TLayerBaseImpl<TElem>>& next)
+    void connectNextConnector(std::shared_ptr<TConnectorBaseImpl<TElem>>& next)
     {
-        _next_layers.push_back(next);
-        connectNextLayerHandler(*next);
+        _next_connectors.push_back(next);
+        connectNextConnectorHandler(*next);
     }
 
-    void connectPrevLayer(std::shared_ptr<TLayerBaseImpl<TElem>>& prev)
+    void connectPrevConnector(std::shared_ptr<TConnectorBaseImpl<TElem>>& prev)
     {
-        if (_prev_layer) {
+        if (_prev_connector) {
             throw std::invalid_argument(
-                "Node already connected to a previous layer");
+                "Node already connected to a previous connector");
         }
-        _prev_layer = prev.get();
-        connectPrevLayerHandler(*prev);
+        _prev_connector = prev.get();
+        connectPrevConnectorHandler(*prev);
     }
-
-    // TTensor<TElem>* operator->() { return &_values; }
-
-    // const TTensor<TElem>* operator->() const { return &_values; }
 
     TTensor<TElem>& values() { return _values; }
 
-    TTensor<TElem>& gradients() { return _gradients; }
+    TTensor<TElem>& gradient() { return _gradient; }
 
     size_t shape(int i) const { return _values.shape(i); }
 
@@ -128,38 +127,13 @@ public:
     void setDims(const TArray& arr)
     {
         _values.setDims(arr);
-        _gradients.setDims(arr);
+        _gradient.setDims(arr);
     }
 
     void setDims(const std::initializer_list<size_t> shape)
     {
         _values.setDims(shape);
-        _gradients.setDims(shape);
-    }
-};
-
-template <class TElem>
-class TDefaultNodeImpl : public TNodeBaseImpl<TElem> {
-
-protected:
-    virtual void connectNextLayerHandler(TLayerBaseImpl<TElem>&) {}
-
-    virtual void connectPrevLayerHandler(TLayerBaseImpl<TElem>&) {}
-
-    virtual void callHandler() {}
-
-public:
-    TDefaultNodeImpl() = default;
-
-    template <typename TArray>
-    TDefaultNodeImpl(TArray& shape) : TNodeBaseImpl<TElem>(shape)
-    {
-    }
-
-    template <typename TArray>
-    TDefaultNodeImpl(const std::initializer_list<size_t>& shape)
-        : TNodeBaseImpl<TElem>(shape)
-    {
+        _gradient.setDims(shape);
     }
 };
 
@@ -167,13 +141,24 @@ template <class TElem>
 class TNode {
 
     friend class TNodeBaseImpl<TElem>;
-    friend class TLayer<TElem>;
-    friend class TLayerBaseImpl<TElem>;
+    friend class TConnector<TElem>;
+    friend class TConnectorBaseImpl<TElem>;
 
     std::shared_ptr<TNodeBaseImpl<TElem>> _impl;
 
 public:
     TNode(const std::shared_ptr<TNodeBaseImpl<TElem>>& impl) : _impl(impl) {}
+
+    template <typename... TArgs>
+    TNode(TArgs... args)
+        : TNode(std::make_shared<TNodeBaseImpl<TElem>>(args...))
+    {
+    }
+
+    TNode(const std::initializer_list<size_t> list)
+        : TNode(std::make_shared<TNodeBaseImpl<TElem>>(list))
+    {
+    }
 
     template <typename... Args>
     TElem& value(const Args... args)
@@ -205,27 +190,16 @@ public:
 
     TNodeBaseImpl<TElem>* get() { return _impl.get(); }
 
-    void connectNextLayer(TLayerBaseImpl<TElem>& next)
+    void connectNextConnector(TConnectorBaseImpl<TElem>& next)
     {
-        _impl->connectNextLayer(next);
+        _impl->connectNextConnector(next);
         next._impl->connectPrevNode(_impl);
     }
 
-    void connectPrevLayer(TLayer<TElem>& prev)
+    void connectPrevConnector(TConnector<TElem>& prev)
     {
-        _impl->connectPrevLayer(prev._impl);
+        _impl->connectPrevConnector(prev._impl);
         prev._impl->connectNextNode(_impl);
-    }
-
-    template <typename... TArgs>
-    static TNode Default(TArgs... args)
-    {
-        return TNode(std::make_shared<TDefaultNodeImpl<TElem>>(args...));
-    }
-
-    static TNode Default(const std::initializer_list<size_t> list)
-    {
-        return TNode(std::make_shared<TDefaultNodeImpl<TElem>>(list));
     }
 
     TNodeBaseImpl<TElem>* operator->() { return _impl.get(); }

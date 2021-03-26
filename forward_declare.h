@@ -3,10 +3,10 @@
 namespace snnl {
 
 template <class TElem>
-class TLayerBaseImpl;
+class TConnectorBaseImpl;
 
 template <class TElem>
-class TLayer;
+class TConnector;
 
 template <class TElem>
 class TNodeBaseImpl;

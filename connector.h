@@ -10,11 +10,11 @@
 namespace snnl {
 
 template <class TElem>
-class TLayerBaseImpl {
+class TConnectorBaseImpl {
 
     friend class TNodeBaseImpl<TElem>;
     friend class TNode<TElem>;
-    friend class TLayer<TElem>;
+    friend class TConnector<TElem>;
 
 protected:
     std::vector<std::shared_ptr<TNodeBaseImpl<TElem>>> _next_nodes;
@@ -26,20 +26,23 @@ protected:
     size_t _next_ready = 0;
     bool   _was_build  = false;
 
-    virtual void connectNextNodeHandler(TNodeBaseImpl<TElem>& next_node) = 0;
+    virtual void connectNextNodeHandler(TNodeBaseImpl<TElem>&){};
 
-    virtual void connectPrevNodeHandler(TNodeBaseImpl<TElem>& prev_node) = 0;
+    virtual void connectPrevNodeHandler(TNodeBaseImpl<TElem>&){};
 
 public:
-    virtual TNode<TElem> createOutputNode(std::vector<TNode<TElem>>&) const = 0;
+    virtual TNode<TElem> createOutputNode(std::vector<TNode<TElem>>&)
+    {
+        return TNode<TElem>();
+    };
 
-    virtual void callHandler() = 0;
+    virtual void forwardHandler() = 0;
 
     virtual void buildHandler(bool was_build_before) = 0;
 
-    virtual void backCallHandler() = 0;
+    virtual void backwardHandler() = 0;
 
-    virtual ~TLayerBaseImpl() {}
+    virtual ~TConnectorBaseImpl() {}
 
     auto& prevNodes() { return _prev_nodes; }
 
@@ -56,29 +59,29 @@ public:
         _all_weights.push_back(TTensor<TElem>(shape));
     }
 
-    void call()
+    void forward()
     {
         _prev_ready++;
         if (_prev_ready == _prev_nodes.size()) {
 
-            callHandler();
+            forwardHandler();
 
             for (auto& node : _next_nodes) {
-                node->call();
+                node->forward();
             }
             _prev_ready = 0;
         }
     }
 
-    void backCall()
+    void backward()
     {
         _next_ready++;
         if (_next_ready == _next_nodes.size()) {
 
-            backCallHandler();
+            backwardHandler();
 
             for (auto& node : _prev_nodes) {
-                node->backCall();
+                node->backward();
             }
 
             _next_ready = 0;
@@ -121,14 +124,14 @@ public:
     {
         if (_all_weights.size() == 0) {
             throw std::out_of_range(
-                "No weights registered yet. Call Layer first");
+                "No weights registered yet. Call Connector first");
         }
         return _all_weights.at(i);
     }
 };
 
 template <class TElem>
-class TDenseLayerImpl : public TLayerBaseImpl<TElem> {
+class TDenseConnectorImpl : public TConnectorBaseImpl<TElem> {
 
     TTensor<TElem>* _weights;
     TTensor<TElem>* _bias;
@@ -139,7 +142,7 @@ class TDenseLayerImpl : public TLayerBaseImpl<TElem> {
     {
         if (nodes.size() > 1) {
             throw std::invalid_argument(
-                "Maximal one node per call for Dense layer");
+                "Maximal one node per call for Dense Connector");
         }
 
         return TNode<TElem>::Default();
@@ -172,7 +175,7 @@ class TDenseLayerImpl : public TLayerBaseImpl<TElem> {
         }
     }
 
-    void callHandler()
+    void forwardHandler()
     {
         dimChecks();
 
@@ -198,70 +201,47 @@ class TDenseLayerImpl : public TLayerBaseImpl<TElem> {
         }
     }
 
-    void backCallHandler()
+    void backwardHandler()
     {
         // TODO: //Calculate dfdw and dfdz here
     }
 
-    void connectNextNodeHandler(TNodeBaseImpl<TElem>&)
-    {
-        /*
-        if (next->shape(-1) != _output_units) {
-            throw std::invalid_argument(
-                "Output dimsion of next node (" +
-                std::to_string(next->shape(-1)) +
-                ") != " + std::to_string(_output_units));
-        }
-        */
-    }
-
-    void connectPrevNodeHandler(TNodeBaseImpl<TElem>&)
-    {
-        /*
-        if (prev->shape(-1) != _input_units) {
-            throw std::invalid_argument("Output dimsion of previous node (" +
-                                        std::to_string(prev->shape(-1)) +
-                                        ") != " + std::to_string(_input_units));
-        }
-        */
-    }
-
 public:
-    TDenseLayerImpl(size_t output_dim) : _output_units(output_dim) {}
+    TDenseConnectorImpl(size_t output_dim) : _output_units(output_dim) {}
 
-    TDenseLayerImpl(size_t input_dim, size_t output_dim)
+    TDenseConnectorImpl(size_t input_dim, size_t output_dim)
         : _input_units(input_dim), _output_units(output_dim)
     {
     }
 
-    virtual ~TDenseLayerImpl()
+    virtual ~TDenseConnectorImpl()
     {
         std::cout << "Destroying Dense Impl" << std::endl;
     }
 };
 
 template <class TElem>
-class TLayer {
+class TConnector {
 
     friend class TNodeBaseImpl<TElem>;
     friend class TNode<TElem>;
-    friend class TLayerBaseImpl<TElem>;
+    friend class TConnectorBaseImpl<TElem>;
 
-    std::shared_ptr<TLayerBaseImpl<TElem>> _impl;
+    std::shared_ptr<TConnectorBaseImpl<TElem>> _impl;
 
-    TLayer(std::shared_ptr<TLayerBaseImpl<TElem>> impl) : _impl(impl) {}
+    TConnector(std::shared_ptr<TConnectorBaseImpl<TElem>> impl) : _impl(impl) {}
 
 public:
-    void connectNextLayer(const TNode<TElem>& next)
+    void connectNextNode(const TNode<TElem>& next)
     {
         _impl->connectNextNode(next._impl);
-        next._impl->connectPrevLayer(_impl);
+        next._impl->connectPrevConnector(_impl);
     }
 
-    void connectPrevLayer(TNode<TElem>& prev)
+    void connectPrevNode(TNode<TElem>& prev)
     {
         _impl->connectPrevNode(prev._impl);
-        prev._impl->connectNextLayer(_impl);
+        prev._impl->connectNextConnector(_impl);
     }
 
     template <typename... TNodes>
@@ -270,26 +250,27 @@ public:
         std::vector<TNode<TElem>> nodes{prev...};
 
         for (auto& node : nodes) {
-            connectPrevLayer(node);
+            connectPrevNode(node);
         }
 
         TNode<TElem> out(_impl->createOutputNode(nodes));
-        connectNextLayer(out);
+        connectNextNode(out);
 
         _impl->build();
 
         return out;
     }
 
-    static TLayer<TElem> TDenseLayer(size_t input_dim, size_t output_dim)
+    static TConnector<TElem> TDenseConnector(size_t input_dim,
+                                             size_t output_dim)
     {
-        return TLayer<TElem>(
-            std::make_shared<TDenseLayerImpl<TElem>>(input_dim, output_dim));
+        return TConnector<TElem>(std::make_shared<TDenseConnectorImpl<TElem>>(
+            input_dim, output_dim));
     }
 
-    TLayerBaseImpl<TElem>* get() { return _impl.get(); }
+    TConnectorBaseImpl<TElem>* get() { return _impl.get(); }
 
-    TLayerBaseImpl<TElem>* operator->() { return _impl.get(); }
+    TConnectorBaseImpl<TElem>* operator->() { return _impl.get(); }
 };
 
 } // namespace snnl

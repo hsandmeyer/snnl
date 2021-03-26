@@ -1,26 +1,28 @@
-#include "layer.h"
+#include "connector.h"
 #include "node.h"
 #include <gtest/gtest-param-test.h>
 #include <gtest/gtest.h>
 
 using namespace snnl;
 
-class OneDenseLayerTest : public ::testing::TestWithParam<std::vector<size_t>> {
+class OneDenseConnectorTest
+    : public ::testing::TestWithParam<std::vector<size_t>> {
 };
-class MultiDenseLayerTest
+class MultiDenseConnectorTest
     : public ::testing::TestWithParam<std::vector<size_t>> {
 };
 
-TEST_P(OneDenseLayerTest, input_shape)
+TEST_P(OneDenseConnectorTest, input_shape)
 {
     auto shape = GetParam();
 
-    TNode<float> input = TNode<float>::Default(shape);
+    TNode<float> input = TNode<float>(shape);
 
     input->values().rangeAllDims(-1, 0, 2);
 
-    TLayer<float> encode = TLayer<float>::TDenseLayer(shape.back(), 32ul);
-    TNode<float>  out    = encode(input);
+    TConnector<float> encode =
+        TConnector<float>::TDenseConnector(shape.back(), 32ul);
+    TNode<float> out = encode(input);
 
     auto& weights = encode->weights(0);
     weights.setAllValues(0);
@@ -32,7 +34,7 @@ TEST_P(OneDenseLayerTest, input_shape)
     auto& bias = encode->weights(1);
     bias.setAllValues(1);
 
-    input->call();
+    input->forward();
 
     out->values().forEach([&](TIndex& index) {
         if (!this->HasFatalFailure()) {
@@ -41,13 +43,14 @@ TEST_P(OneDenseLayerTest, input_shape)
     });
 }
 
-TEST_P(MultiDenseLayerTest, input_shape)
+TEST_P(MultiDenseConnectorTest, input_shape)
 {
     auto shape = GetParam();
 
-    TNode<float>  input  = TNode<float>::Default(shape);
-    TLayer<float> encode = TLayer<float>::TDenseLayer(shape.back(), 32ul);
-    TLayer<float> decode = TLayer<float>::TDenseLayer(32ul, 128ul);
+    TNode<float>      input = TNode<float>(shape);
+    TConnector<float> encode =
+        TConnector<float>::TDenseConnector(shape.back(), 32ul);
+    TConnector<float> decode = TConnector<float>::TDenseConnector(32ul, 128ul);
 
     TNode<float> out = encode(input);
     out              = decode(out);
@@ -60,7 +63,7 @@ TEST_P(MultiDenseLayerTest, input_shape)
     decode->weights(0).setAllValues(1);
     decode->weights(1).setAllValues(1);
 
-    input.get()->call();
+    input.get()->forward();
 
     out->values().forEach([&](TIndex& index) {
         if (!this->HasFatalFailure()) {
@@ -72,13 +75,14 @@ TEST_P(MultiDenseLayerTest, input_shape)
     });
 }
 
-INSTANTIATE_TEST_SUITE_P(OneDenseLayerTestAllTests, OneDenseLayerTest,
+INSTANTIATE_TEST_SUITE_P(OneDenseConnectorTestAllTests, OneDenseConnectorTest,
                          ::testing::Values(std::vector<size_t>{128},
                                            std::vector<size_t>{32, 128},
                                            std::vector<size_t>{128, 128},
                                            std::vector<size_t>{32, 128, 32}));
 
-INSTANTIATE_TEST_SUITE_P(MultiDenseLayerTestAllTests, MultiDenseLayerTest,
+INSTANTIATE_TEST_SUITE_P(MultiDenseConnectorTestAllTests,
+                         MultiDenseConnectorTest,
                          ::testing::Values(std::vector<size_t>{128},
                                            std::vector<size_t>{32, 128},
                                            std::vector<size_t>{128, 128},
