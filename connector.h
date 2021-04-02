@@ -1,6 +1,7 @@
 #pragma once
 #include "forward_declare.h"
 #include "tensor.h"
+#include <algorithm>
 #include <exception>
 #include <initializer_list>
 #include <memory>
@@ -17,10 +18,9 @@ class TConnectorBaseImpl {
     friend class TConnector<TElem>;
 
 protected:
-    std::vector<std::shared_ptr<TNodeBaseImpl<TElem>>> _next_nodes;
-    std::vector<TNodeBaseImpl<TElem>*>                 _prev_nodes;
-
-    std::vector<TTensor<TElem>> _all_weights;
+    std::vector<TNodeBaseImpl<TElem>*>                 _next_nodes;
+    std::vector<std::shared_ptr<TNodeBaseImpl<TElem>>> _prev_nodes;
+    std::vector<TNodeBaseImpl<TElem>*>                 _weights;
 
     size_t _prev_ready = 0;
     size_t _next_ready = 0;
@@ -29,6 +29,8 @@ protected:
     virtual void connectNextNodeHandler(TNodeBaseImpl<TElem>&){};
 
     virtual void connectPrevNodeHandler(TNodeBaseImpl<TElem>&){};
+
+    virtual void connectWeightNodeHandler(TNodeBaseImpl<TElem>&){};
 
 public:
     virtual TNode<TElem> createOutputNode(std::vector<TNode<TElem>>&)
@@ -48,21 +50,29 @@ public:
 
     auto& nextNodes() { return _next_nodes; }
 
-    void addWeightTensor(const std::initializer_list<size_t>& shape)
+    std::shared_ptr<TNodeBaseImpl<TElem>>
+    addWeightTensor(const std::initializer_list<size_t>& shape)
     {
-        _all_weights.push_back(TTensor<TElem>(shape));
+        return addWeightTensor(TIndex{shape});
     }
 
     template <typename TArray>
-    void addWeightTensor(const TArray& shape)
+    std::shared_ptr<TNodeBaseImpl<TElem>> addWeightTensor(const TArray& shape)
     {
-        _all_weights.push_back(TTensor<TElem>(shape));
+        std::shared_ptr<TNodeBaseImpl<TElem>> weight =
+            std::make_shared<TNodeBaseImpl<TElem>>(shape);
+
+        _prev_nodes.push_back(weight);
+        connectWeightNodeHandler(*weight);
+
+        _weights.push_back(weight.get());
+        return weight;
     }
 
     void forward()
     {
         _prev_ready++;
-        if (_prev_ready == _prev_nodes.size()) {
+        if (_prev_ready == _prev_nodes.size() - _weights.size()) {
 
             forwardHandler();
 
@@ -98,13 +108,13 @@ public:
 
     void connectNextNode(std::shared_ptr<TNodeBaseImpl<TElem>> next_node)
     {
-        _next_nodes.push_back(next_node);
+        _next_nodes.push_back(next_node.get());
         connectNextNodeHandler(*next_node);
     }
 
     void connectPrevNode(std::shared_ptr<TNodeBaseImpl<TElem>> prev_node)
     {
-        _prev_nodes.push_back(prev_node.get());
+        _prev_nodes.push_back(prev_node);
         connectPrevNodeHandler(*prev_node);
     }
 
@@ -118,37 +128,53 @@ public:
         return *_prev_nodes.at(i);
     }
 
-    std::vector<TTensor<TElem>*> weights() { return _all_weights; }
+    TNodeBaseImpl<TElem>* weight(size_t i) { return _weights.at(i); }
 
-    TTensor<TElem>& weights(const int i)
+    bool isWeight(TNodeBaseImpl<TElem>* node)
     {
-        if (_all_weights.size() == 0) {
-            throw std::out_of_range(
-                "No weights registered yet. Call Connector first");
+        for (TNodeBaseImpl<TElem>*& prev : _weights) {
+            if (prev == node) {
+                return true;
+            }
         }
-        return _all_weights.at(i);
+        return false;
     }
 };
 
 template <class TElem>
 class TDenseConnectorImpl : public TConnectorBaseImpl<TElem> {
 
-    TTensor<TElem>* _weights;
-    TTensor<TElem>* _bias;
-    size_t          _input_units = -1;
-    size_t          _output_units;
+    TNodeBaseImpl<TElem>* _W;
+    TNodeBaseImpl<TElem>* _B;
 
-    TNode<TElem> createOutputNode(std::vector<TNode<TElem>>& nodes) const
+    std::vector<TNodeBaseImpl<TElem>*> _inputs;
+    std::vector<TNodeBaseImpl<TElem>*> _outputs;
+
+    size_t _input_units = -1;
+    size_t _output_units;
+
+    virtual void connectPrevNodeHandler(TNodeBaseImpl<TElem>& prev) override
+    {
+        _inputs.push_back(&prev);
+    }
+
+    virtual void connectNextNodeHandler(TNodeBaseImpl<TElem>& prev) override
+    {
+        _outputs.push_back(&prev);
+    }
+
+    virtual TNode<TElem>
+    createOutputNode(std::vector<TNode<TElem>>& nodes) override
     {
         if (nodes.size() > 1) {
             throw std::invalid_argument(
                 "Maximal one node per call for Dense Connector");
         }
 
-        return TNode<TElem>::Default();
+        return TNode<TElem>();
     }
 
-    virtual void buildHandler(bool was_build_before)
+    virtual void buildHandler(bool was_build_before) override
     {
 
         if (!was_build_before) {
@@ -159,49 +185,74 @@ class TDenseConnectorImpl : public TConnectorBaseImpl<TElem> {
             this->addWeightTensor({_output_units});
         }
 
-        _weights = &this->_all_weights.at(0);
-        _bias    = &this->_all_weights.at(1);
+        _W = this->weight(0);
+        _B = this->weight(1);
     }
 
-    void dimChecks()
+    void dimChecks(TTensor<TElem>& input)
     {
-        for (auto& prev : this->_prev_nodes) {
-            if (_input_units != prev->shape(-1)) {
-                throw std::invalid_argument(
-                    "Output dimsion of previous node (" +
-                    std::to_string(prev->shape(-1)) +
-                    ") != " + std::to_string(_input_units));
-            }
+        if (_input_units != input.shape(-1)) {
+            throw std::invalid_argument("Output dimsion of previous node (" +
+                                        std::to_string(input.shape(-1)) +
+                                        ") != " + std::to_string(_input_units));
         }
     }
 
-    void forwardHandler()
+    void forwardHandler() override
     {
-        dimChecks();
 
-        for (size_t node_ind = 0; node_ind < this->_prev_nodes.size();
-             node_ind++) {
-            auto& output = this->_next_nodes[node_ind]->values();
-            auto& input  = this->_prev_nodes[node_ind]->values();
+        for (size_t node_ind = 0; node_ind < this->_inputs.size(); node_ind++) {
+
+            // if (this->isWeight(this->_prev_nodes[node_ind].get())) {
+            //    continue;
+            //}
+
+            auto& output = _outputs[node_ind]->values();
+            auto& input  = _inputs[node_ind]->values();
+
+            dimChecks(input);
 
             TIndex out_shape = input.shape();
             out_shape[-1]    = _output_units;
             output.setDims(out_shape);
 
-            for (size_t higherDim = 0; higherDim < input.shapeFlattened(-2);
-                 higherDim++) {
-                for (size_t i = 0; i < output.shape(-1); i++) {
-                    output(higherDim, i) = (*_bias)(i);
+            if (out_shape.NDims() > 1) {
+                // TODO Generalize this using a better tensor loop with some
+                // kind of ellipsis object
+                for (size_t higherDim = 0; higherDim < input.shapeFlattened(-2);
+                     higherDim++) {
+                    for (size_t i = 0; i < output.shape(-1); i++) {
+                        output(higherDim, i) = _B->value(i);
+                        for (size_t j = 0; j < input.shape(-1); j++) {
+                            output(higherDim, i) +=
+                                _W->value(i, j) * input(higherDim, j);
+                        }
+                    }
+                }
+                /*
+                output.forEach([&](const TIndex& ind_in) {
+                    int i          = ind_in[-1];
+                    output(ind_in) = _B->value(i);
+                    auto ind_out   = ind_in;
                     for (size_t j = 0; j < input.shape(-1); j++) {
-                        output(higherDim, i) +=
-                            (*_weights)(i, j) * input(higherDim, j);
+                        ind_out[-1] = j;
+                        output(ind_in) += _W->value(i, j) * input(ind_out);
+                    }
+                });
+                */
+            }
+            else {
+                for (size_t i = 0; i < output.shape(-1); i++) {
+                    output(i) = _B->value(i);
+                    for (size_t j = 0; j < input.shape(-1); j++) {
+                        output(i) += _W->value(i, j) * input(j);
                     }
                 }
             }
         }
     }
 
-    void backwardHandler()
+    void backwardHandler() override
     {
         // TODO: //Calculate dfdw and dfdz here
     }

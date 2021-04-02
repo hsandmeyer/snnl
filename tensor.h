@@ -58,7 +58,8 @@ class TTensor {
         return j;
     }
 
-    void forEach(TIndex& index, int dim, std::function<TElem(TIndex&)> caller)
+    void forEach(TIndex& index, int dim,
+                 std::function<TElem(const TIndex&)> caller)
     {
 
         if (dim + 1 < NDims()) {
@@ -76,7 +77,8 @@ class TTensor {
         }
     }
 
-    void forEach(TIndex& index, int dim, std::function<void(TIndex&)> caller)
+    void forEach(TIndex& index, int dim,
+                 std::function<void(const TIndex&)> caller)
     {
 
         if (dim + 1 < NDims()) {
@@ -111,13 +113,13 @@ public:
         fillDims(shape);
     }
 
-    void forEach(std::function<void(TIndex&)> func)
+    void forEach(std::function<void(const TIndex&)> func)
     {
         TIndex index(NDims());
         forEach(index, 0, func);
     }
 
-    void modifyForEach(std::function<TElem(TIndex&)> func)
+    void modifyForEach(std::function<TElem(const TIndex&)> func)
     {
         TIndex index(NDims());
         forEach(index, 0, func);
@@ -128,8 +130,9 @@ public:
         if (axis < 0) {
             axis += NDims();
         }
-        modifyForEach(
-            [&](TIndex& index) -> TElem { return start + index[axis] * step; });
+        modifyForEach([&](const TIndex& index) -> TElem {
+            return start + index[axis] * step;
+        });
     }
 
     template <typename TArray>

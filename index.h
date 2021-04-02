@@ -9,34 +9,56 @@ public:
               std::enable_if_t<std::is_unsigned<Integer>::value, int> = 0>
     size_t& operator[](Integer i)
     {
+#ifdef DEBUG
+        return _shape.at(i);
+#else
         return _shape[i];
+#endif
     }
 
     template <typename Integer,
               std::enable_if_t<std::is_signed<Integer>::value, int> = 0>
     size_t& operator[](Integer i)
     {
+#ifdef DEBUG
+        if (i < 0) {
+            return _shape.at(_shape.size() + i);
+        }
+        return _shape.at(i);
+#else
         if (i < 0) {
             return _shape[_shape.size() + i];
         }
         return _shape[i];
+#endif
     }
 
     template <typename Integer,
               std::enable_if_t<std::is_unsigned<Integer>::value, int> = 0>
     const size_t& operator[](Integer i) const
     {
+#ifdef DEBUG
+        return _shape.at(i);
+#else
         return _shape[i];
+#endif
     }
 
     template <typename Integer,
               std::enable_if_t<std::is_signed<Integer>::value, int> = 0>
     const size_t& operator[](Integer i) const
     {
+#ifdef DEBUG
+        if (i < 0) {
+            return _shape.at(_shape.size() + i);
+        }
+        return _shape.at(i);
+#else
         if (i < 0) {
             return _shape[_shape.size() + i];
         }
         return _shape[i];
+#endif
     }
 
     TIndex(std::initializer_list<size_t> list) : _shape(list) {}

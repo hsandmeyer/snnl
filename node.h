@@ -15,9 +15,8 @@ class TNodeBaseImpl {
     TTensor<TElem> _values;
     TTensor<TElem> _gradient;
 
-    std::vector<std::shared_ptr<TConnectorBaseImpl<TElem>>> _next_connectors =
-        {};
-    TConnectorBaseImpl<TElem>* _prev_connector = nullptr;
+    std::vector<TConnectorBaseImpl<TElem>*>    _next_connectors = {};
+    std::shared_ptr<TConnectorBaseImpl<TElem>> _prev_connector  = nullptr;
 
 protected:
     virtual void connectNextConnectorHandler(TConnectorBaseImpl<TElem>&){};
@@ -66,6 +65,10 @@ public:
         return _gradient(args...);
     }
 
+    void setAllValues(const TElem& elem) { _values.setAllValues(elem); }
+
+    void setAllGrad(const TElem& grad) { _gradient.setAllValues(grad); }
+
     virtual ~TNodeBaseImpl()
     {
 
@@ -99,7 +102,7 @@ public:
 
     void connectNextConnector(std::shared_ptr<TConnectorBaseImpl<TElem>>& next)
     {
-        _next_connectors.push_back(next);
+        _next_connectors.push_back(next.get());
         connectNextConnectorHandler(*next);
     }
 
@@ -109,7 +112,7 @@ public:
             throw std::invalid_argument(
                 "Node already connected to a previous connector");
         }
-        _prev_connector = prev.get();
+        _prev_connector = prev;
         connectPrevConnectorHandler(*prev);
     }
 

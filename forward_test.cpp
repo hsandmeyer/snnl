@@ -24,19 +24,20 @@ TEST_P(OneDenseConnectorTest, input_shape)
         TConnector<float>::TDenseConnector(shape.back(), 32ul);
     TNode<float> out = encode(input);
 
-    auto& weights = encode->weights(0);
-    weights.setAllValues(0);
+    auto weights = encode->weight(0);
+    weights->setAllValues(0);
 
-    for (size_t i = 0; i < std::min(weights.shape(0), weights.shape(1)); i++) {
-        weights(i, i) = 1;
+    for (size_t i = 0; i < std::min(weights->shape(0), weights->shape(1));
+         i++) {
+        weights->value(i, i) = 1;
     }
 
-    auto& bias = encode->weights(1);
-    bias.setAllValues(1);
+    auto bias = encode->weight(1);
+    bias->setAllValues(1);
 
     input->forward();
 
-    out->values().forEach([&](TIndex& index) {
+    out->values().forEach([&](const TIndex& index) {
         if (!this->HasFatalFailure()) {
             ASSERT_FLOAT_EQ(out.value(index), 1 + 2 * index[-1]);
         }
@@ -57,18 +58,18 @@ TEST_P(MultiDenseConnectorTest, input_shape)
 
     input->values().setAllValues(1);
 
-    encode->weights(0).setAllValues(1);
-    encode->weights(1).setAllValues(1);
+    encode->weight(0)->setAllValues(1);
+    encode->weight(1)->setAllValues(1);
 
-    decode->weights(0).setAllValues(1);
-    decode->weights(1).setAllValues(1);
+    decode->weight(0)->setAllValues(1);
+    decode->weight(1)->setAllValues(1);
 
     input.get()->forward();
 
-    out->values().forEach([&](TIndex& index) {
+    out->values().forEach([&](const TIndex& index) {
         if (!this->HasFatalFailure()) {
-            ASSERT_FLOAT_EQ(decode->weights(0).shape(1) *
-                                    (encode->weights(0).shape(1) + 1) +
+            ASSERT_FLOAT_EQ(decode->weight(0)->shape(1) *
+                                    (encode->weight(0)->shape(1) + 1) +
                                 1,
                             out.value(index));
         }
