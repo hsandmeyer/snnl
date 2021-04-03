@@ -11,31 +11,41 @@
 namespace snnl {
 
 template <class TElem>
-class TConnectorBaseImpl {
+class TConnector : public std::enable_shared_from_this<TConnector<TElem>> {
 
-    friend class TNodeBaseImpl<TElem>;
     friend class TNode<TElem>;
-    friend class TConnector<TElem>;
+    friend class TNode<TElem>;
 
 protected:
-    std::vector<TNodeBaseImpl<TElem>*>                 _next_nodes;
-    std::vector<std::shared_ptr<TNodeBaseImpl<TElem>>> _prev_nodes;
-    std::vector<TNodeBaseImpl<TElem>*>                 _weights;
+    std::vector<TNode<TElem>*>   _next_nodes;
+    std::vector<TNodePtr<TElem>> _prev_nodes;
+    std::vector<TNode<TElem>*>   _weights;
 
     size_t _prev_ready = 0;
     size_t _next_ready = 0;
     bool   _was_build  = false;
 
-    virtual void connectNextNodeHandler(TNodeBaseImpl<TElem>&){};
+    virtual void connectNextNodeHandler(TNode<TElem>&){};
 
-    virtual void connectPrevNodeHandler(TNodeBaseImpl<TElem>&){};
+    virtual void connectPrevNodeHandler(TNode<TElem>&){};
 
-    virtual void connectWeightNodeHandler(TNodeBaseImpl<TElem>&){};
+    virtual void connectWeightNodeHandler(TNode<TElem>&){};
+
+    TConnector() = default;
 
 public:
-    virtual TNode<TElem> createOutputNode(std::vector<TNode<TElem>>&)
+    TConnector(const TConnector&) = delete;
+
+    template <template <class> class TChildConnector, typename... TArgs>
+    static ::std::shared_ptr<TConnector> create(TArgs&&... args)
     {
-        return TNode<TElem>();
+        return ::std::shared_ptr<TChildConnector<TElem>>(
+            new TChildConnector<TElem>(::std::forward<TArgs>(args)...));
+    }
+
+    virtual TNodePtr<TElem> createOutputNode(std::vector<TNodePtr<TElem>>&)
+    {
+        return TNode<TElem>::create();
     };
 
     virtual void forwardHandler() = 0;
@@ -44,23 +54,23 @@ public:
 
     virtual void backwardHandler() = 0;
 
-    virtual ~TConnectorBaseImpl() {}
+    virtual ~TConnector() {}
 
     auto& prevNodes() { return _prev_nodes; }
 
     auto& nextNodes() { return _next_nodes; }
 
-    std::shared_ptr<TNodeBaseImpl<TElem>>
-    addWeightTensor(const std::initializer_list<size_t>& shape)
+    TNodePtr<TElem> addWeightTensor(const std::initializer_list<size_t>& shape)
     {
         return addWeightTensor(TIndex{shape});
     }
 
+    TConnectorPtr<TElem> getPtr() { return this->shared_from_this(); }
+
     template <typename TArray>
-    std::shared_ptr<TNodeBaseImpl<TElem>> addWeightTensor(const TArray& shape)
+    TNodePtr<TElem> addWeightTensor(const TArray& shape)
     {
-        std::shared_ptr<TNodeBaseImpl<TElem>> weight =
-            std::make_shared<TNodeBaseImpl<TElem>>(shape);
+        TNodePtr<TElem> weight = TNode<TElem>::create(shape, true);
 
         _prev_nodes.push_back(weight);
         connectWeightNodeHandler(*weight);
@@ -69,10 +79,22 @@ public:
         return weight;
     }
 
+    size_t numCallingPrevNodes()
+    {
+        size_t ret = 0;
+        for (auto& node_ptr : _prev_nodes) {
+            if (node_ptr->isWeight() || node_ptr->isConstant()) {
+                continue;
+            }
+            ret++;
+        }
+        return ret;
+    }
+
     void forward()
     {
         _prev_ready++;
-        if (_prev_ready == _prev_nodes.size() - _weights.size()) {
+        if (_prev_ready == numCallingPrevNodes()) {
 
             forwardHandler();
 
@@ -106,72 +128,84 @@ public:
         _was_build = true;
     }
 
-    void connectNextNode(std::shared_ptr<TNodeBaseImpl<TElem>> next_node)
+    void connectNextNode(const TNodePtr<TElem>& next_node)
     {
+        if (!_next_nodes.empty() && _next_nodes.back() == next_node.get()) {
+            return;
+        }
         _next_nodes.push_back(next_node.get());
         connectNextNodeHandler(*next_node);
+        next_node->connectPrevConnector(getPtr());
     }
 
-    void connectPrevNode(std::shared_ptr<TNodeBaseImpl<TElem>> prev_node)
+    void connectPrevNode(const TNodePtr<TElem>& prev_node)
     {
+        if (!_prev_nodes.empty() &&
+            _prev_nodes.back().get() == prev_node.get()) {
+            return;
+        }
         _prev_nodes.push_back(prev_node);
         connectPrevNodeHandler(*prev_node);
+        prev_node->connectNextConnector(getPtr());
     }
 
-    TNodeBaseImpl<TElem>& nextNode(const size_t i)
-    {
-        return *_next_nodes.at(i);
-    }
+    TNode<TElem>& nextNode(const size_t i) { return *_next_nodes.at(i); }
 
-    TNodeBaseImpl<TElem>& prevNode(const size_t i)
-    {
-        return *_prev_nodes.at(i);
-    }
+    TNode<TElem>& prevNode(const size_t i) { return *_prev_nodes.at(i); }
 
-    TNodeBaseImpl<TElem>* weight(size_t i) { return _weights.at(i); }
+    TNode<TElem>* weight(size_t i) { return _weights.at(i); }
 
-    bool isWeight(TNodeBaseImpl<TElem>* node)
+    template <typename... TNodePtrs>
+    TNodePtr<TElem> connect(const TNodePtrs&... prev)
     {
-        for (TNodeBaseImpl<TElem>*& prev : _weights) {
-            if (prev == node) {
-                return true;
-            }
+        std::vector<TNodePtr<TElem>> nodes{prev...};
+
+        for (auto& node : nodes) {
+            connectPrevNode(node);
         }
-        return false;
+
+        TNodePtr<TElem> out = createOutputNode(nodes);
+
+        connectNextNode(out);
+        build();
+
+        return out;
     }
 };
 
 template <class TElem>
-class TDenseConnectorImpl : public TConnectorBaseImpl<TElem> {
+class TDenseConnector : public TConnector<TElem> {
 
-    TNodeBaseImpl<TElem>* _W;
-    TNodeBaseImpl<TElem>* _B;
+    friend class TConnector<TElem>;
 
-    std::vector<TNodeBaseImpl<TElem>*> _inputs;
-    std::vector<TNodeBaseImpl<TElem>*> _outputs;
+    TNode<TElem>* _W;
+    TNode<TElem>* _B;
+
+    std::vector<TNode<TElem>*> _inputs;
+    std::vector<TNode<TElem>*> _outputs;
 
     size_t _input_units = -1;
     size_t _output_units;
 
-    virtual void connectPrevNodeHandler(TNodeBaseImpl<TElem>& prev) override
+    virtual void connectPrevNodeHandler(TNode<TElem>& prev) override
     {
         _inputs.push_back(&prev);
     }
 
-    virtual void connectNextNodeHandler(TNodeBaseImpl<TElem>& prev) override
+    virtual void connectNextNodeHandler(TNode<TElem>& prev) override
     {
         _outputs.push_back(&prev);
     }
 
-    virtual TNode<TElem>
-    createOutputNode(std::vector<TNode<TElem>>& nodes) override
+    virtual TNodePtr<TElem>
+    createOutputNode(std::vector<TNodePtr<TElem>>& nodes) override
     {
         if (nodes.size() > 1) {
             throw std::invalid_argument(
                 "Maximal one node per call for Dense Connector");
         }
 
-        return TNode<TElem>();
+        return TNode<TElem>::create();
     }
 
     virtual void buildHandler(bool was_build_before) override
@@ -202,10 +236,6 @@ class TDenseConnectorImpl : public TConnectorBaseImpl<TElem> {
     {
 
         for (size_t node_ind = 0; node_ind < this->_inputs.size(); node_ind++) {
-
-            // if (this->isWeight(this->_prev_nodes[node_ind].get())) {
-            //    continue;
-            //}
 
             auto& output = _outputs[node_ind]->values();
             auto& input  = _inputs[node_ind]->values();
@@ -257,71 +287,18 @@ class TDenseConnectorImpl : public TConnectorBaseImpl<TElem> {
         // TODO: //Calculate dfdw and dfdz here
     }
 
-public:
-    TDenseConnectorImpl(size_t output_dim) : _output_units(output_dim) {}
+    TDenseConnector(size_t output_dim) : _output_units(output_dim) {}
 
-    TDenseConnectorImpl(size_t input_dim, size_t output_dim)
+    TDenseConnector(size_t input_dim, size_t output_dim)
         : _input_units(input_dim), _output_units(output_dim)
     {
     }
 
-    virtual ~TDenseConnectorImpl()
+public:
+    virtual ~TDenseConnector()
     {
         std::cout << "Destroying Dense Impl" << std::endl;
     }
-};
-
-template <class TElem>
-class TConnector {
-
-    friend class TNodeBaseImpl<TElem>;
-    friend class TNode<TElem>;
-    friend class TConnectorBaseImpl<TElem>;
-
-    std::shared_ptr<TConnectorBaseImpl<TElem>> _impl;
-
-    TConnector(std::shared_ptr<TConnectorBaseImpl<TElem>> impl) : _impl(impl) {}
-
-public:
-    void connectNextNode(const TNode<TElem>& next)
-    {
-        _impl->connectNextNode(next._impl);
-        next._impl->connectPrevConnector(_impl);
-    }
-
-    void connectPrevNode(TNode<TElem>& prev)
-    {
-        _impl->connectPrevNode(prev._impl);
-        prev._impl->connectNextConnector(_impl);
-    }
-
-    template <typename... TNodes>
-    TNode<TElem> operator()(TNodes&... prev)
-    {
-        std::vector<TNode<TElem>> nodes{prev...};
-
-        for (auto& node : nodes) {
-            connectPrevNode(node);
-        }
-
-        TNode<TElem> out(_impl->createOutputNode(nodes));
-        connectNextNode(out);
-
-        _impl->build();
-
-        return out;
-    }
-
-    static TConnector<TElem> TDenseConnector(size_t input_dim,
-                                             size_t output_dim)
-    {
-        return TConnector<TElem>(std::make_shared<TDenseConnectorImpl<TElem>>(
-            input_dim, output_dim));
-    }
-
-    TConnectorBaseImpl<TElem>* get() { return _impl.get(); }
-
-    TConnectorBaseImpl<TElem>* operator->() { return _impl.get(); }
 };
 
 } // namespace snnl

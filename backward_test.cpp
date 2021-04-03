@@ -13,13 +13,13 @@ TEST_P(OneDenseConnectorTest, input_shape)
 {
     auto shape = GetParam();
 
-    TNode<float> input = TNode<float>(shape);
+    TNodePtr<float> input = TNode<float>::create(shape);
 
     input->values().rangeAllDims(-1, 0, 2);
 
-    TConnector<float> encode =
-        TConnector<float>::TDenseConnector(shape.back(), 32ul);
-    TNode<float> out = encode(input);
+    TConnectorPtr<float> encode =
+        TConnector<float>::create<TDenseConnector>(shape.back(), 32ul);
+    TNodePtr<float> out = encode->connect(input);
 
     out->backward();
 }

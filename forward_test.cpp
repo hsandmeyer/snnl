@@ -16,13 +16,14 @@ TEST_P(OneDenseConnectorTest, input_shape)
 {
     auto shape = GetParam();
 
-    TNode<float> input = TNode<float>(shape);
+    TNodePtr<float> input = TNode<float>::create(shape);
 
     input->values().rangeAllDims(-1, 0, 2);
 
-    TConnector<float> encode =
-        TConnector<float>::TDenseConnector(shape.back(), 32ul);
-    TNode<float> out = encode(input);
+    TConnectorPtr<float> encode =
+        TConnector<float>::create<TDenseConnector>(shape.back(), 32ul);
+
+    TNodePtr<float> out = encode->connect(input);
 
     auto weights = encode->weight(0);
     weights->setAllValues(0);
@@ -39,7 +40,7 @@ TEST_P(OneDenseConnectorTest, input_shape)
 
     out->values().forEach([&](const TIndex& index) {
         if (!this->HasFatalFailure()) {
-            ASSERT_FLOAT_EQ(out.value(index), 1 + 2 * index[-1]);
+            ASSERT_FLOAT_EQ(out->value(index), 1 + 2 * index[-1]);
         }
     });
 }
@@ -48,13 +49,14 @@ TEST_P(MultiDenseConnectorTest, input_shape)
 {
     auto shape = GetParam();
 
-    TNode<float>      input = TNode<float>(shape);
-    TConnector<float> encode =
-        TConnector<float>::TDenseConnector(shape.back(), 32ul);
-    TConnector<float> decode = TConnector<float>::TDenseConnector(32ul, 128ul);
+    TNodePtr<float>      input = TNode<float>::create(shape);
+    TConnectorPtr<float> encode =
+        TConnector<float>::create<TDenseConnector>(shape.back(), 32ul);
+    TConnectorPtr<float> decode =
+        TConnector<float>::create<TDenseConnector>(32ul, 128ul);
 
-    TNode<float> out = encode(input);
-    out              = decode(out);
+    TNodePtr<float> out = encode->connect(input);
+    out                 = decode->connect(out);
 
     input->values().setAllValues(1);
 
@@ -71,7 +73,7 @@ TEST_P(MultiDenseConnectorTest, input_shape)
             ASSERT_FLOAT_EQ(decode->weight(0)->shape(1) *
                                     (encode->weight(0)->shape(1) + 1) +
                                 1,
-                            out.value(index));
+                            out->value(index));
         }
     });
 }

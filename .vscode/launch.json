@@ -25,6 +25,11 @@
                     "description": "Enable break on all-exceptions",
                     "text": "catch throw",
                     "ignoreFailures": true
+                },
+                {
+                    "description": "Skip std header files",
+                    "text": "skip -gfile bits/*.h",
+                    "ignoreFailures": true
                 }
             ],
             "preLaunchTask": "make_tensor_test"
@@ -50,6 +55,11 @@
                     "description": "Enable break on all-exceptions",
                     "text": "catch throw",
                     "ignoreFailures": true
+                },
+                {
+                    "description": "Skip std header files",
+                    "text": "skip -gfile bits/*.h",
+                    "ignoreFailures": true
                 }
             ],
             "preLaunchTask": "make_forward_test"
@@ -74,6 +84,11 @@
                 {
                     "description": "Enable break on all-exceptions",
                     "text": "catch throw",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Skip std header files",
+                    "text": "skip -gfile bits/*.h",
                     "ignoreFailures": true
                 }
             ],

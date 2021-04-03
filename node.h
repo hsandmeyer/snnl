@@ -6,39 +6,28 @@
 namespace snnl {
 
 template <class TElem>
-class TNodeBaseImpl {
+class TNode : public std::enable_shared_from_this<TNode<TElem>> {
 
-    friend class TNode<TElem>;
     friend class TConnector<TElem>;
-    friend class TConnectorBaseImpl<TElem>;
+    friend class TConnector<TElem>;
 
     TTensor<TElem> _values;
     TTensor<TElem> _gradient;
 
-    std::vector<TConnectorBaseImpl<TElem>*>    _next_connectors = {};
-    std::shared_ptr<TConnectorBaseImpl<TElem>> _prev_connector  = nullptr;
+    bool _is_const;
+    bool _is_weight;
 
-protected:
-    virtual void connectNextConnectorHandler(TConnectorBaseImpl<TElem>&){};
+    std::vector<TConnector<TElem>*> _next_connectors = {};
+    TConnectorPtr<TElem>            _prev_connector  = nullptr;
 
-    virtual void connectPrevConnectorHandler(TConnectorBaseImpl<TElem>&){};
-
-    virtual void forwardHandler(){};
-
-    virtual void backwardHandler(){};
+    TNode() = default;
 
 public:
-    TNodeBaseImpl() = default;
-
-    template <typename TArray>
-    TNodeBaseImpl(TArray shape)
+    template <typename... TArgs>
+    static ::std::shared_ptr<TNode> create(TArgs&&... args)
     {
-        setDims(shape);
-    }
-
-    TNodeBaseImpl(const std::initializer_list<size_t> shape)
-        : TNodeBaseImpl(std::vector<size_t>(shape.begin(), shape.end()))
-    {
+        return ::std::shared_ptr<TNode>(
+            new TNode(::std::forward<TArgs>(args)...));
     }
 
     template <typename... Args>
@@ -69,17 +58,13 @@ public:
 
     void setAllGrad(const TElem& grad) { _gradient.setAllValues(grad); }
 
-    virtual ~TNodeBaseImpl()
-    {
+    virtual ~TNode() { std::cout << "Destroying TNode" << std::endl; }
 
-        std::cout << "Destroying TNodeBase" << std::endl;
-    }
-
-    TConnectorBaseImpl<TElem>& prevConnector() { return _prev_connector; }
+    TConnector<TElem>& prevConnector() { return _prev_connector; }
 
     auto& nextConnectors() { return _next_connectors; }
 
-    TConnectorBaseImpl<TElem>& nextConnector(const size_t i)
+    TConnector<TElem>& nextConnector(const size_t i)
     {
         return _next_connectors.at(i);
     }
@@ -94,26 +79,32 @@ public:
     void backward()
     {
         if (_prev_connector) {
-            // TODO: calculate deltas here
-
             _prev_connector->backward();
         }
     }
 
-    void connectNextConnector(std::shared_ptr<TConnectorBaseImpl<TElem>>& next)
+    void connectNextConnector(TConnectorPtr<TElem> next)
     {
+        if (!_next_connectors.empty() &&
+            _next_connectors.back() == next.get()) {
+            return;
+        }
         _next_connectors.push_back(next.get());
-        connectNextConnectorHandler(*next);
+        auto thisPtr = getPtr();
+        next->connectPrevNode(thisPtr);
     }
 
-    void connectPrevConnector(std::shared_ptr<TConnectorBaseImpl<TElem>>& prev)
+    void connectPrevConnector(TConnectorPtr<TElem> prev)
     {
+        if (prev.get() == _prev_connector.get()) {
+            return;
+        }
         if (_prev_connector) {
             throw std::invalid_argument(
                 "Node already connected to a previous connector");
         }
         _prev_connector = prev;
-        connectPrevConnectorHandler(*prev);
+        prev->connectNextNode(getPtr());
     }
 
     TTensor<TElem>& values() { return _values; }
@@ -138,86 +129,35 @@ public:
         _values.setDims(shape);
         _gradient.setDims(shape);
     }
-};
 
-template <class TElem>
-class TNode {
+    bool isWeight() { return _is_weight; }
 
-    friend class TNodeBaseImpl<TElem>;
-    friend class TConnector<TElem>;
-    friend class TConnectorBaseImpl<TElem>;
+    bool isConstant() { return _is_weight; }
 
-    std::shared_ptr<TNodeBaseImpl<TElem>> _impl;
+    bool isLeave() { return _prev_connector == nullptr; }
 
-public:
-    TNode(const std::shared_ptr<TNodeBaseImpl<TElem>>& impl) : _impl(impl) {}
+    void setWeight(bool val) { _is_weight = val; }
 
-    template <typename... TArgs>
-    TNode(TArgs... args)
-        : TNode(std::make_shared<TNodeBaseImpl<TElem>>(args...))
-    {
-    }
+    void setConstent(bool val) { _is_const = val; }
 
-    TNode(const std::initializer_list<size_t> list)
-        : TNode(std::make_shared<TNodeBaseImpl<TElem>>(list))
-    {
-    }
+protected:
+    TNode(const TNode&) = delete;
 
-    template <typename... Args>
-    TElem& value(const Args... args)
-    {
-        return _impl->value(args...);
-    }
-
-    template <typename... Args>
-    const TElem& value(const Args&&... args) const
-    {
-        return _impl->value(std::forward(args...));
-    }
-
-    TTensor<TElem>& values() { return _impl->_values; }
-
-    const TTensor<TElem>& values() const { return _impl->_values; }
-
-    template <typename... Args>
-    TElem& grad(const Args... args)
-    {
-        return _impl->grad(args...);
-    }
-
-    template <typename... Args>
-    const TElem& grad(const Args&&... args) const
-    {
-        return _impl->grad(std::forward(args...));
-    }
-
-    TNodeBaseImpl<TElem>* get() { return _impl.get(); }
-
-    void connectNextConnector(TConnectorBaseImpl<TElem>& next)
-    {
-        _impl->connectNextConnector(next);
-        next._impl->connectPrevNode(_impl);
-    }
-
-    void connectPrevConnector(TConnector<TElem>& prev)
-    {
-        _impl->connectPrevConnector(prev._impl);
-        prev._impl->connectNextNode(_impl);
-    }
-
-    TNodeBaseImpl<TElem>* operator->() { return _impl.get(); }
-
-    const TNodeBaseImpl<TElem>* operator->() const { return _impl.get(); }
+    const TNode& operator=(const TNode&) = delete;
 
     template <typename TArray>
-    void setDims(const TArray& arr)
+    TNode(const TArray& shape, bool is_weight = false, bool is_const = false)
+        : _is_const(is_const), _is_weight(is_weight)
     {
-        _impl->setDims(arr);
+        setDims(shape);
     }
 
-    void setDims(const std::initializer_list<size_t> shape)
+    TNode(const std::initializer_list<size_t> shape)
+        : TNode(std::vector<size_t>(shape.begin(), shape.end()))
     {
-        _impl->setDims(shape);
     }
+
+    TNodePtr<TElem> getPtr() { return this->shared_from_this(); }
 };
+
 } // namespace snnl
