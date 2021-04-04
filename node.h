@@ -14,8 +14,10 @@ class TNode : public std::enable_shared_from_this<TNode<TElem>> {
     TTensor<TElem> _values;
     TTensor<TElem> _gradient;
 
-    bool _is_const;
-    bool _is_weight;
+    size_t _backward_calls;
+
+    bool _is_const  = false;
+    bool _is_weight = false;
 
     std::vector<TConnector<TElem>*> _next_connectors = {};
     TConnectorPtr<TElem>            _prev_connector  = nullptr;
@@ -62,36 +64,31 @@ public:
 
     TConnector<TElem>& prevConnector() { return _prev_connector; }
 
-    auto& nextConnectors() { return _next_connectors; }
-
-    TConnector<TElem>& nextConnector(const size_t i)
-    {
-        return _next_connectors.at(i);
-    }
-
     void forward()
     {
         for (auto& connector : _next_connectors) {
-            connector->forward();
+            connector->forward(this);
         }
     }
 
     void backward()
     {
-        if (_prev_connector) {
-            _prev_connector->backward();
+        _backward_calls++;
+        if (_prev_connector && _backward_calls == _next_connectors.size()) {
+            _prev_connector->backward(this);
         }
+        _backward_calls = 0;
     }
 
     void connectNextConnector(TConnectorPtr<TElem> next)
     {
-        if (!_next_connectors.empty() &&
-            _next_connectors.back() == next.get()) {
-            return;
+        for (auto& conn : _next_connectors) {
+            if (conn == next.get()) {
+                // allready connected
+                return;
+            }
         }
         _next_connectors.push_back(next.get());
-        auto thisPtr = getPtr();
-        next->connectPrevNode(thisPtr);
     }
 
     void connectPrevConnector(TConnectorPtr<TElem> prev)
@@ -104,7 +101,6 @@ public:
                 "Node already connected to a previous connector");
         }
         _prev_connector = prev;
-        prev->connectNextNode(getPtr());
     }
 
     TTensor<TElem>& values() { return _values; }

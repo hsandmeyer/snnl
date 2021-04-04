@@ -21,7 +21,7 @@ TEST_P(OneDenseConnectorTest, input_shape)
     input->values().rangeAllDims(-1, 0, 2);
 
     TConnectorPtr<float> encode =
-        TConnector<float>::create<TDenseConnector>(shape.back(), 32ul);
+        TConnector<float>::create<TDenseConnector>(32ul);
 
     TNodePtr<float> out = encode->connect(input);
 
