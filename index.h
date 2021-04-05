@@ -63,10 +63,7 @@ public:
 
     TIndex(std::initializer_list<size_t> list) : _shape(list) {}
 
-    template <typename... TArgs>
-    TIndex(TArgs&&... args) : _shape(std::forward<TArgs>(args)...)
-    {
-    }
+    TIndex(size_t size) : _shape(size) {}
 
     TIndex() = default;
 
@@ -100,5 +97,7 @@ public:
 
     void setNDims(size_t NDims) { _shape.resize(NDims); }
 
-    size_t NDims() { return _shape.size(); }
+    size_t NDims() const { return _shape.size(); }
+
+    bool operator!=(const TIndex& b) { return _shape != b._shape; }
 };

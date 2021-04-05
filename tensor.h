@@ -4,6 +4,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iostream>
+#include <ostream>
 #include <stdexcept>
 #include <vector>
 
@@ -19,7 +20,7 @@ class TTensor {
     template <typename TArray>
     void fillDims(const TArray& shape)
     {
-        std::cout << "Constructing tensor with ";
+        std::cout << "Setting tensor dimension: (";
         _shape.setNDims(_NDims);
 
         int i = 0;
@@ -28,7 +29,7 @@ class TTensor {
             _shape[i] = dim_len;
             i++;
         }
-        std::cout << std::endl;
+        std::cout << ")" << std::endl;
 
         fillStrides();
     }
@@ -46,16 +47,61 @@ class TTensor {
     }
 
     template <size_t N, typename... Ts>
-    size_t dataOffset(size_t i, Ts... im)
+    size_t dataOffset(size_t i, Ts... im) const
     {
         return i * _strides[_strides.NDims() - sizeof...(Ts) - 1] +
                dataOffset<N + 1>(im...);
     }
 
     template <size_t N>
-    size_t dataOffset(size_t j)
+    size_t dataOffset(size_t j) const
     {
         return j;
+    }
+
+    void stream(TIndex& ind, int dim, std::ostream& o) const
+    {
+
+        if (dim + 1 < NDims()) {
+            o << "{";
+            for (size_t i = 0; i < _shape[dim]; ++i) {
+                ind[dim] = i;
+                stream(ind, dim + 1, o);
+            }
+            o << "}";
+        }
+        else {
+            if (index(ind) == 0) {
+                o << "{";
+            }
+            else {
+                o << std::string(dim, ' ') << "{";
+            }
+            for (size_t i = 0; i < _shape[dim]; ++i) {
+                ind[dim] = i;
+                o << std::scientific << (*this)(ind);
+                if (i < _shape[dim] - 1) {
+                    o << ",";
+                }
+            }
+            if (index(ind) == _data.size() - 1) {
+                o << "}";
+            }
+            else {
+                o << "},\n";
+            }
+        }
+    }
+
+    friend std::ostream& operator<<(std::ostream& o, const TTensor& t)
+    {
+
+        TIndex index(t.NDims());
+        auto   p = o.precision();
+        o.precision(6);
+        t.stream(index, 0, o);
+        o.precision(p);
+        return o;
     }
 
     void forEach(TIndex& index, int dim,
@@ -158,11 +204,11 @@ public:
 
     int NDims() const { return _NDims; }
 
-    size_t NElems() { return _strides[0] * _shape[0]; }
+    size_t NElems() const { return _strides[0] * _shape[0]; }
 
     // Length of axis i, if all following axis ( > i) are flattened
     // into i
-    size_t shapeFlattened(int i)
+    size_t shapeFlattened(int i) const
     {
 
         if (i < 0) {
@@ -202,13 +248,18 @@ public:
             (*const_cast<TTensor<TElem>*>(this))(index_vec));
     }
 
-    TElem& operator()(const TIndex& index_vec)
+    size_t index(const TIndex& index_vec) const
     {
         size_t index = 0;
         for (size_t i = _strides.NDims(); i-- > 0;) {
             index += index_vec[i] * _strides[i];
         }
-        return _data[index];
+        return index;
+    }
+
+    TElem& operator()(const TIndex& index_vec)
+    {
+        return _data[index(index_vec)];
     }
 
     size_t shape(int i) const
@@ -247,15 +298,25 @@ public:
 
     const TIndex& shape() const { return _shape; }
 
-    TIndex subShape(int first, int last) const
+    void setFlattenedValues(std::initializer_list<TElem> flattened_values)
     {
-        if (first < 0) {
-            first += NDims();
+        if (flattened_values.size() != _data.size()) {
+            throw std::invalid_argument(
+                "Flattened array does not match data size");
         }
-        if (last < 0) {
-            last += NDims();
+        std::copy(flattened_values.begin(), flattened_values.end(),
+                  _data.begin());
+    }
+
+    template <typename TArray>
+    void setFlattenedValues(const TArray& flattened_values)
+    {
+        if (flattened_values.size() != _data.size()) {
+            throw std::invalid_argument(
+                "Flattened array does not match data size");
         }
-        return TIndex(_shape.cbegin() + first, _shape.cbegin() + first + last);
+        std::copy(flattened_values.begin(), flattened_values.end(),
+                  _data.begin());
     }
 
     void setAllValues(TElem value) { std::fill(begin(), end(), value); }

@@ -1,6 +1,7 @@
 #pragma once
 #include "forward_declare.h"
 #include "tensor.h"
+#include <initializer_list>
 #include <memory>
 
 namespace snnl {
@@ -20,7 +21,7 @@ class TNode : public std::enable_shared_from_this<TNode<TElem>> {
     bool _is_weight = false;
 
     std::vector<TConnector<TElem>*> _next_connectors = {};
-    TConnectorPtr<TElem>            _prev_connector  = nullptr;
+    TConnectorShPtr<TElem>          _prev_connector  = nullptr;
 
     TNode() = default;
 
@@ -30,6 +31,10 @@ public:
     {
         return ::std::shared_ptr<TNode>(
             new TNode(::std::forward<TArgs>(args)...));
+    }
+    static ::std::shared_ptr<TNode> create(std::initializer_list<TElem> shape)
+    {
+        return ::std::shared_ptr<TNode>(new TNode(shape));
     }
 
     template <typename... Args>
@@ -56,6 +61,8 @@ public:
         return _gradient(args...);
     }
 
+    size_t shapeFlattened(int i) const { return _values.shapeFlattened(i); }
+
     void setAllValues(const TElem& elem) { _values.setAllValues(elem); }
 
     void setAllGrad(const TElem& grad) { _gradient.setAllValues(grad); }
@@ -66,6 +73,8 @@ public:
 
     void forward()
     {
+        std::cout << "Forward call at node" << std::endl;
+        std::cout << values() << std::endl;
         for (auto& connector : _next_connectors) {
             connector->forward(this);
         }
@@ -80,7 +89,7 @@ public:
         _backward_calls = 0;
     }
 
-    void connectNextConnector(TConnectorPtr<TElem> next)
+    void connectNextConnector(TConnectorShPtr<TElem> next)
     {
         for (auto& conn : _next_connectors) {
             if (conn == next.get()) {
@@ -91,7 +100,7 @@ public:
         _next_connectors.push_back(next.get());
     }
 
-    void connectPrevConnector(TConnectorPtr<TElem> prev)
+    void connectPrevConnector(TConnectorShPtr<TElem> prev)
     {
         if (prev.get() == _prev_connector.get()) {
             return;
@@ -105,13 +114,17 @@ public:
 
     TTensor<TElem>& values() { return _values; }
 
+    const TTensor<TElem>& values() const { return _values; }
+
     TTensor<TElem>& gradient() { return _gradient; }
+
+    const TTensor<TElem>& gradient() const { return _gradient; }
 
     size_t shape(int i) const { return _values.shape(i); }
 
-    TIndex shape() { return _values.shape(); }
+    TIndex& shape() { return _values.shape(); }
 
-    const TIndex shape() const { return _values.shape(); }
+    const TIndex& shape() const { return _values.shape(); }
 
     template <typename TArray>
     void setDims(const TArray& arr)
@@ -126,11 +139,11 @@ public:
         _gradient.setDims(shape);
     }
 
-    bool isWeight() { return _is_weight; }
+    bool isWeight() const { return _is_weight; }
 
-    bool isConstant() { return _is_weight; }
+    bool isConstant() const { return _is_weight; }
 
-    bool isLeave() { return _prev_connector == nullptr; }
+    bool isLeave() const { return _prev_connector == nullptr; }
 
     void setWeight(bool val) { _is_weight = val; }
 
@@ -153,7 +166,7 @@ protected:
     {
     }
 
-    TNodePtr<TElem> getPtr() { return this->shared_from_this(); }
+    TNodeShPtr<TElem> getPtr() { return this->shared_from_this(); }
 };
 
 } // namespace snnl

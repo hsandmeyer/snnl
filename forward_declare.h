@@ -16,9 +16,15 @@ template <class TElem>
 class TNode;
 
 template <class TElem>
-using TNodePtr = std::shared_ptr<TNode<TElem>>;
+using TNodeShPtr = std::shared_ptr<TNode<TElem>>;
 
 template <class TElem>
-using TConnectorPtr = std::shared_ptr<TConnector<TElem>>;
+using TConnectorShPtr = std::shared_ptr<TConnector<TElem>>;
+
+template <class TElem>
+using TNodeShPtr = std::shared_ptr<TNode<TElem>>;
+
+template <class TElem>
+using TConnectorShPtr = std::shared_ptr<TConnector<TElem>>;
 
 } // namespace snnl
