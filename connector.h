@@ -1,6 +1,7 @@
 #pragma once
 #include "forward_declare.h"
 #include "tensor.h"
+#include <algorithm>
 #include <cmath>
 #include <cwchar>
 #include <exception>
@@ -173,6 +174,15 @@ public:
 
     TNode<TElem>* weight(size_t i) const { return _weights.at(i); }
 
+    void iterateNodesBackwards(TNode<TElem>*                      calling_node,
+                               std::function<void(TNode<TElem>&)> func)
+    {
+        auto nconn = getBackwardNodeConnection(calling_node);
+        for (auto& prev : nconn.input_nodes) {
+            prev->iterateNodesBackwards(func);
+        }
+    }
+
     template <typename... TNodeShPtrs>
     TNodeShPtr<TElem> connect(const TNodeShPtrs&... prev_nodes)
     {
@@ -183,10 +193,14 @@ public:
              std::array<TNodeShPtr<TElem>, sizeof...(TNodeShPtrs)>{
                  prev_nodes...}) {
 
-            _owned_nodes.push_back(node_ptr);
+            if (std::find_if(_owned_nodes.begin(), _owned_nodes.end(),
+                             [&node_ptr](auto& elem) {
+                                 return node_ptr.get() == elem.get();
+                             }) == _owned_nodes.end()) {
+                _owned_nodes.push_back(node_ptr);
+            }
 
             nconn.input_nodes.push_back(node_ptr.get());
-
             node_ptr->connectNextConnector(getPtr());
         }
 

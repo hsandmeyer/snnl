@@ -79,6 +79,38 @@ TEST_P(MultiDenseConnectorTest, input_shape)
     });
 }
 
+INSTANTIATE_TEST_SUITE_P(OneDenseConnectorTestAllTests, OneDenseConnectorTest,
+                         ::testing::Values(std::vector<size_t>{128},
+                                           std::vector<size_t>{32, 128},
+                                           std::vector<size_t>{128, 128},
+                                           std::vector<size_t>{32, 128, 32}));
+
+INSTANTIATE_TEST_SUITE_P(MultiDenseConnectorTestAllTests,
+                         MultiDenseConnectorTest,
+                         ::testing::Values(std::vector<size_t>{128},
+                                           std::vector<size_t>{32, 128},
+                                           std::vector<size_t>{128, 128},
+                                           std::vector<size_t>{32, 128, 32}));
+
+TEST(OwnershipTransfer, linear)
+{
+    // TODO: Proper deregistration
+
+    TNodeShPtr<float> input = TNode<float>::create({1});
+    input->values().setFlattenedValues({1});
+
+    TNodeShPtr<float> out;
+    {
+        auto sum = TConnector<float>::create<TSumConnector>();
+        out      = sum->connect(input);
+        out      = sum->connect(out);
+        out      = sum->connect(out);
+    }
+    input->forward();
+
+    EXPECT_FLOAT_EQ(out->value(0), 1.0f);
+}
+
 TEST(ComplexGraph, complex_graph)
 {
 
@@ -129,19 +161,6 @@ TEST(ComplexGraph, complex_graph)
     // For check of correct result: See check.py
     EXPECT_FLOAT_EQ(res->value(0), 8.360636886487102);
 }
-
-INSTANTIATE_TEST_SUITE_P(OneDenseConnectorTestAllTests, OneDenseConnectorTest,
-                         ::testing::Values(std::vector<size_t>{128},
-                                           std::vector<size_t>{32, 128},
-                                           std::vector<size_t>{128, 128},
-                                           std::vector<size_t>{32, 128, 32}));
-
-INSTANTIATE_TEST_SUITE_P(MultiDenseConnectorTestAllTests,
-                         MultiDenseConnectorTest,
-                         ::testing::Values(std::vector<size_t>{128},
-                                           std::vector<size_t>{32, 128},
-                                           std::vector<size_t>{128, 128},
-                                           std::vector<size_t>{32, 128, 32}));
 
 int main(int argc, char** argv)
 {

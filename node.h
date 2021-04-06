@@ -21,7 +21,9 @@ class TNode : public std::enable_shared_from_this<TNode<TElem>> {
     bool _is_weight = false;
 
     std::vector<TConnector<TElem>*> _next_connectors = {};
-    TConnectorShPtr<TElem>          _prev_connector  = nullptr;
+    TConnector<TElem>*              _prev_connector  = nullptr;
+
+    TConnectorShPtr<TElem> _owned_connector;
 
     TNode() = default;
 
@@ -74,7 +76,6 @@ public:
     void forward()
     {
         std::cout << "Forward call at node" << std::endl;
-        std::cout << values() << std::endl;
         for (auto& connector : _next_connectors) {
             connector->forward(this);
         }
@@ -98,18 +99,35 @@ public:
             }
         }
         _next_connectors.push_back(next.get());
+
+        auto RemoveCircularOwnership = [&next](TNode<TElem>& node) {
+            if (node._owned_connector.get() == next.get()) {
+                node._owned_connector = nullptr;
+            }
+        };
+
+        iterateNodesBackwards(RemoveCircularOwnership);
     }
 
     void connectPrevConnector(TConnectorShPtr<TElem> prev)
     {
-        if (prev.get() == _prev_connector.get()) {
+        if (prev.get() == _prev_connector) {
             return;
         }
         if (_prev_connector) {
             throw std::invalid_argument(
                 "Node already connected to a previous connector");
         }
-        _prev_connector = prev;
+        _prev_connector  = prev.get();
+        _owned_connector = prev;
+    }
+
+    void iterateNodesBackwards(std::function<void(TNode<TElem>&)> func)
+    {
+        func(*this);
+        if (_prev_connector) {
+            _prev_connector->iterateNodesBackwards(this, func);
+        }
     }
 
     TTensor<TElem>& values() { return _values; }
