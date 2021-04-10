@@ -3,6 +3,7 @@
 #include "tensor.h"
 #include <initializer_list>
 #include <memory>
+#include <stdexcept>
 
 namespace snnl {
 
@@ -15,7 +16,7 @@ class TNode : public std::enable_shared_from_this<TNode<TElem>> {
     TTensor<TElem> _values;
     TTensor<TElem> _gradient;
 
-    size_t _backward_calls;
+    size_t _backward_calls = 0;
 
     bool _is_const  = false;
     bool _is_weight = false;
@@ -75,19 +76,46 @@ public:
 
     void forward()
     {
-        std::cout << "Forward call at node" << std::endl;
+        // std::cout << "FORWARD on node" << std::endl;
         for (auto& connector : _next_connectors) {
             connector->forward(this);
         }
     }
 
+    void computeGrad()
+    {
+        if (!_next_connectors.empty()) {
+            throw std::invalid_argument(
+                "Calling computeGrad on non-leave node");
+        }
+        _gradient.setAllValues(1);
+        if (_prev_connector) {
+            _prev_connector->backward(this);
+        }
+    }
+
     void backward()
     {
+        // std::cout << "BACKWARD on node " << std::endl;
         _backward_calls++;
         if (_prev_connector && _backward_calls == _next_connectors.size()) {
             _prev_connector->backward(this);
+            _backward_calls = 0;
         }
-        _backward_calls = 0;
+    }
+
+    void zeroGrad()
+    {
+        _backward_calls++;
+        if (_backward_calls == _next_connectors.size() ||
+            _next_connectors.empty()) {
+
+            _gradient.setAllValues(0);
+            _backward_calls = 0;
+        }
+        if (_prev_connector) {
+            _prev_connector->zeroGrad(this);
+        }
     }
 
     void connectNextConnector(TConnectorShPtr<TElem> next)
@@ -109,6 +137,8 @@ public:
         iterateNodesBackwards(RemoveCircularOwnership);
     }
 
+    size_t NDims() { return _values.NDims(); }
+
     void connectPrevConnector(TConnectorShPtr<TElem> prev)
     {
         if (prev.get() == _prev_connector) {
@@ -122,9 +152,22 @@ public:
         _owned_connector = prev;
     }
 
+    void
+    iterateConnectorsBackwards(std::function<void(TConnector<TElem>&)> func)
+    {
+        if (_prev_connector) {
+            _prev_connector->iterateConnectorsBackwards(this, func);
+        }
+    }
+
     void iterateNodesBackwards(std::function<void(TNode<TElem>&)> func)
     {
-        func(*this);
+        _backward_calls++;
+        if (_prev_connector && (_backward_calls == _next_connectors.size() ||
+                                _next_connectors.empty())) {
+            func(*this);
+            _backward_calls = 0;
+        }
         if (_prev_connector) {
             _prev_connector->iterateNodesBackwards(this, func);
         }

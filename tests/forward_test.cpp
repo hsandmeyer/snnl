@@ -1,5 +1,5 @@
 #include "connector.h"
-#include "home/hauke/src/snnl/forward_declare.h"
+#include "forward_declare.h"
 #include "node.h"
 #include <gtest/gtest-param-test.h>
 #include <gtest/gtest.h>

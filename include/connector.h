@@ -8,6 +8,7 @@
 #include <initializer_list>
 #include <memory>
 #include <numeric>
+#include <quadmath.h>
 #include <stdexcept>
 #include <vector>
 
@@ -22,9 +23,8 @@ class TConnector : public std::enable_shared_from_this<TConnector<TElem>> {
 protected:
     struct SNodeConnection {
         std::vector<TNode<TElem>*> input_nodes;
-        TNode<TElem>*              output_node    = nullptr;
-        size_t                     forward_calls  = 0;
-        size_t                     backward_calls = 0;
+        TNode<TElem>*              output_node   = nullptr;
+        size_t                     forward_calls = 0;
     };
 
     std::vector<SNodeConnection> _node_connections;
@@ -33,9 +33,9 @@ protected:
 
     std::vector<TNodeShPtr<TElem>> _owned_nodes;
 
-    size_t _prev_ready = 0;
-    size_t _next_ready = 0;
-    bool   _was_build  = false;
+    size_t _num_backward_calls = 0;
+
+    bool _was_build = false;
 
     TConnector() = default;
 
@@ -155,12 +155,28 @@ public:
     void backward(const TNode<TElem>* calling_node)
     {
         SNodeConnection& nconn = getBackwardNodeConnection(calling_node);
-        nconn.backward_calls++;
 
         backwardHandler(nconn.output_node, _weights, nconn.input_nodes);
 
         for (auto& node : nconn.input_nodes) {
             node->backward();
+        }
+    }
+
+    void zeroGrad(const TNode<TElem>* calling_node)
+    {
+        SNodeConnection& nconn = getBackwardNodeConnection(calling_node);
+
+        _num_backward_calls++;
+        if (_num_backward_calls == _node_connections.size()) {
+            for (auto& weight : _weights) {
+                weight->gradient().setAllValues(0);
+            }
+            _num_backward_calls = 0;
+        }
+
+        for (auto& node : nconn.input_nodes) {
+            node->zeroGrad();
         }
     }
 
@@ -174,12 +190,30 @@ public:
 
     TNode<TElem>* weight(size_t i) const { return _weights.at(i); }
 
+    std::vector<TNode<TElem>*> weights() const { return _weights; }
+
     void iterateNodesBackwards(TNode<TElem>*                      calling_node,
                                std::function<void(TNode<TElem>&)> func)
     {
         auto nconn = getBackwardNodeConnection(calling_node);
         for (auto& prev : nconn.input_nodes) {
             prev->iterateNodesBackwards(func);
+        }
+    }
+
+    void
+    iterateConnectorsBackwards(TNode<TElem>* calling_node,
+                               std::function<void(TConnector<TElem>&)> func)
+    {
+        _num_backward_calls++;
+        if (_num_backward_calls == _node_connections.size()) {
+            func(*this);
+            _num_backward_calls = 0;
+        }
+
+        auto nconn = getBackwardNodeConnection(calling_node);
+        for (auto& prev : nconn.input_nodes) {
+            prev->iterateConnectorsBackwards(func);
         }
     }
 
@@ -283,7 +317,7 @@ class TDenseConnector : public TConnector<TElem> {
                         TNode<TElem>*                     output_node) override
     {
 
-        std::cout << "FORWARD on dense layer" << std::endl;
+        // std::cout << "FORWARD on dense layer" << std::endl;
         dimChecks(input_nodes);
 
         auto& input  = input_nodes.front()->values();
@@ -327,10 +361,41 @@ class TDenseConnector : public TConnector<TElem> {
         }
     }
 
-    void backwardHandler(const TNode<TElem>*, std::vector<TNode<TElem>*>&,
-                         std::vector<TNode<TElem>*>&) override
+    void backwardHandler(const TNode<TElem>*         output,
+                         std::vector<TNode<TElem>*>& weights,
+                         std::vector<TNode<TElem>*>& input_nodes) override
     {
-        // TODO: //Calculate dfdw and dfdz here
+        // std::cout << "BACKWARD on dense layer" << std::endl;
+        dimChecks(input_nodes);
+
+        auto& input = input_nodes.front();
+
+        TNode<TElem>& W = *weights.at(0);
+        TNode<TElem>& B = *weights.at(1);
+
+        if (input->NDims() > 1) {
+            for (size_t higherDim = 0; higherDim < input->shapeFlattened(-2);
+                 higherDim++) {
+                for (size_t i = 0; i < output->shape(-1); i++) {
+                    B.grad(i) += output->grad(higherDim, i);
+                    for (size_t j = 0; j < input->shape(-1); j++) {
+                        input->grad(higherDim, j) +=
+                            W.value(i, j) * output->grad(higherDim, i);
+                        W.grad(i, j) += input->value(higherDim, j) *
+                                        output->grad(higherDim, i);
+                    }
+                }
+            }
+        }
+        else {
+            for (size_t i = 0; i < output->shape(-1); i++) {
+                B.grad(i) += output->grad(i);
+                for (size_t j = 0; j < input->shape(-1); j++) {
+                    input->grad(j) += W.value(i, j) * output->grad(i);
+                    W.grad(i, j) += input->value(j) * output->grad(i);
+                }
+            }
+        }
     }
 
     TDenseConnector(size_t output_dim) : _output_units(output_dim) {}
@@ -390,7 +455,7 @@ public:
                         const std::vector<TNode<TElem>*>&,
                         TNode<TElem>* output_node) override
     {
-        std::cout << "FORWARD on Add layer" << std::endl;
+        // std::cout << "FORWARD on Add layer" << std::endl;
         output_node->setAllValues(0);
         for (auto& input_node_ptr : input_nodes) {
             for (size_t ind = 0; ind < output_node->values().shapeFlattened(-1);
@@ -404,6 +469,7 @@ public:
                          std::vector<TNode<TElem>*>&,
                          std::vector<TNode<TElem>*>& input_nodes) override
     {
+        // std::cout << "BACKWARD on add layer" << std::endl;
         for (auto& input_node_ptr : input_nodes) {
             for (size_t ind = 0; ind < output_node->values().shapeFlattened(-1);
                  ind++) {
@@ -435,7 +501,7 @@ public:
                         const std::vector<TNode<TElem>*>&,
                         TNode<TElem>* output_node) override
     {
-        std::cout << "FORWARD on Sum layer" << std::endl;
+        // std::cout << "FORWARD on Sum layer" << std::endl;
 
         output_node->value(0) = 0;
         output_node->value(0) += std::accumulate(
@@ -447,7 +513,8 @@ public:
                          std::vector<TNode<TElem>*>&,
                          std::vector<TNode<TElem>*>& input_nodes) override
     {
-        TElem output_grad = output_node->gradient()(0);
+        // std::cout << "BACKWARD on sum layer" << std::endl;
+        TElem output_grad = output_node->grad(0);
         for (auto& val : input_nodes.front()->gradient()) {
             val += output_grad;
         }
@@ -472,16 +539,26 @@ public:
         return input_nodes.front()->shape();
     }
 
+    TElem preciseExp(TElem val)
+    {
+        if constexpr (std::is_same<TElem, __float128>::value) {
+            return expq(val);
+        }
+        else {
+            return std::exp(val);
+        }
+    }
+
     void forwardHandler(const std::vector<TNode<TElem>*>& input_nodes,
                         const std::vector<TNode<TElem>*>&,
                         TNode<TElem>* output_node) override
     {
-        std::cout << "FORWARD on Sigmoid layer" << std::endl;
+        // std::cout << "FORWARD on Sigmoid layer" << std::endl;
         TNode<TElem>* input_node = input_nodes.front();
         for (size_t ind = 0; ind < output_node->shapeFlattened(-1); ind++) {
             output_node->value(ind) =
                 static_cast<TElem>(1) /
-                (static_cast<TElem>(1) + std::exp(-input_node->value(ind)));
+                (static_cast<TElem>(1) + preciseExp(-input_node->value(ind)));
         }
     }
 
@@ -489,14 +566,15 @@ public:
                          std::vector<TNode<TElem>*>&,
                          std::vector<TNode<TElem>*>& input_nodes) override
     {
+        // std::cout << "BACKWARD on sigmoid layer" << std::endl;
         TNode<TElem>* input_node = input_nodes.front();
 
         for (size_t ind = 0; ind < output_node->shapeFlattened(-1); ind++) {
-            TElem output_value = output_node->value(ind);
-            TElem output_grad  = output_node->grad(ind);
-            TElem tmp          = std::exp(-output_value) + 1;
+            TElem input_value = input_node->value(ind);
+            TElem output_grad = output_node->grad(ind);
+            TElem tmp         = preciseExp(-input_value) + 1;
             input_node->grad(ind) +=
-                std::exp(-output_value) / (tmp * tmp) * output_grad;
+                preciseExp(-input_value) / (tmp * tmp) * output_grad;
         }
     }
 };

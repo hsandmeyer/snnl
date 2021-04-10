@@ -5,6 +5,7 @@
 #include <initializer_list>
 #include <iostream>
 #include <ostream>
+#include <random>
 #include <stdexcept>
 #include <vector>
 
@@ -12,24 +13,26 @@ namespace snnl {
 template <class TElem>
 class TTensor {
 
-    int                _NDims;
-    TIndex             _shape;
-    TIndex             _strides;
+    int    _NDims;
+    TIndex _shape;
+    TIndex _strides;
+
+    std::mt19937_64    _rng;
     std::vector<TElem> _data = {};
 
     template <typename TArray>
     void fillDims(const TArray& shape)
     {
-        std::cout << "Setting tensor dimension: (";
+        // std::cout << "Setting tensor dimension: (";
         _shape.setNDims(_NDims);
 
         int i = 0;
         for (auto dim_len : shape) {
-            std::cout << dim_len << " ";
+            //   std::cout << dim_len << " ";
             _shape[i] = dim_len;
             i++;
         }
-        std::cout << ")" << std::endl;
+        // std::cout << ")" << std::endl;
 
         fillStrides();
     }
@@ -67,16 +70,15 @@ class TTensor {
             for (size_t i = 0; i < _shape[dim]; ++i) {
                 ind[dim] = i;
                 stream(ind, dim + 1, o);
+                if (i < _shape[dim] - 1) {
+                    o << ",\n";
+                    o << std::string(dim + 1, ' ');
+                }
             }
             o << "}";
         }
         else {
-            if (index(ind) == 0) {
-                o << "{";
-            }
-            else {
-                o << std::string(dim, ' ') << "{";
-            }
+            o << "{";
             for (size_t i = 0; i < _shape[dim]; ++i) {
                 ind[dim] = i;
                 o << std::scientific << (*this)(ind);
@@ -84,12 +86,7 @@ class TTensor {
                     o << ",";
                 }
             }
-            if (index(ind) == _data.size() - 1) {
-                o << "}";
-            }
-            else {
-                o << "},\n";
-            }
+            o << "}";
         }
     }
 
@@ -146,9 +143,11 @@ public:
     typedef typename std::vector<TElem>::iterator       iterator;
     typedef typename std::vector<TElem>::const_iterator const_iterator;
 
-    TTensor() : _NDims(0) {}
+    // TODO: global seed
+    TTensor() : _NDims(0), _rng(time(NULL)) {}
 
-    TTensor(const std::initializer_list<size_t> shape) : _NDims(shape.size())
+    TTensor(const std::initializer_list<size_t> shape)
+        : _NDims(shape.size()), _rng(time(NULL))
     {
         fillDims(shape);
     }
@@ -320,6 +319,15 @@ public:
     }
 
     void setAllValues(TElem value) { std::fill(begin(), end(), value); }
+
+    // TODO: Xavier initialization
+    void uniform(TElem min = -1, TElem max = 1)
+    {
+        std::uniform_real_distribution<double> dist(min, max);
+        for (auto& val : *this) {
+            val = static_cast<TElem>(dist(_rng));
+        }
+    }
 
     auto begin() { return _data.begin(); }
 
