@@ -93,9 +93,14 @@ public:
 
     void setAllGrad(const TElem& grad) { _gradient.setAllValues(grad); }
 
-    virtual ~TNode() { std::cout << "Destroying TNode" << std::endl; }
+    std::vector<TConnector<TElem>*> nextConnectors()
+    {
+        return _next_connectors;
+    }
 
-    TConnector<TElem>& prevConnector() { return _prev_connector; }
+    TConnector<TElem>* prevConnector() { return _prev_connector; }
+
+    virtual ~TNode() { std::cout << "Destroying TNode" << std::endl; }
 
     void forward()
     {

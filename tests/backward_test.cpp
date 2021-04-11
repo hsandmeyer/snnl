@@ -1,4 +1,4 @@
-#include "connector.h"
+#include "common_connectors.h"
 #include "forward_declare.h"
 #include "node.h"
 #include <gtest/gtest-param-test.h>
@@ -45,7 +45,7 @@ void test_node_grad(TNode<double>&                   node,
 
         double grad = node.grad(index);
 
-        compRel(double(numerical_grad), double(grad), 1e-5);
+        compRel(double(numerical_grad), double(grad), 1e-4);
     });
 }
 
