@@ -1,3 +1,4 @@
+#pragma once
 #include <initializer_list>
 #include <vector>
 

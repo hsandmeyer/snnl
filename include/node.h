@@ -3,6 +3,7 @@
 #include "tensor.h"
 #include <initializer_list>
 #include <memory>
+#include <set>
 #include <stdexcept>
 
 namespace snnl {
@@ -27,6 +28,28 @@ class TNode : public std::enable_shared_from_this<TNode<TElem>> {
     TConnectorShPtr<TElem> _owned_connector;
 
     TNode() = default;
+
+    void collectNodesInternal(std::set<TNodeShPtr<TElem>>& nodes)
+    {
+        nodes.emplace(getPtr());
+        if (_prev_connector) {
+            _prev_connector->collectNodesInternal(this, nodes);
+        }
+    }
+
+    void collectWeightsInternal(std::set<TNodeShPtr<TElem>>& weights)
+    {
+        if (_prev_connector) {
+            _prev_connector->collectWeightsInternal(this, weights);
+        }
+    }
+
+    void collectConnectorsInternal(std::set<TConnectorShPtr<TElem>>& connetors)
+    {
+        if (_prev_connector) {
+            _prev_connector->collectNodesInternal(this, connetors);
+        }
+    }
 
 public:
     template <typename... TArgs>
@@ -106,71 +129,55 @@ public:
 
     void zeroGrad()
     {
-        _backward_calls++;
-        if (_backward_calls == _next_connectors.size() ||
-            _next_connectors.empty()) {
+        iterateNodes(
+            [](TNode<TElem>& node) { node.gradient().setAllValues(0); });
+        iterateWeights(
+            [](TNode<TElem>& weight) { weight.gradient().setAllValues(0); });
+    }
 
-            _gradient.setAllValues(0);
-            _backward_calls = 0;
-        }
-        if (_prev_connector) {
-            _prev_connector->zeroGrad(this);
+    void iterateConnectors(std::function<void(TConnector<TElem>&)> func)
+    {
+        auto all_connectors = collectConnectors();
+        for (auto& conn : all_connectors) {
+            func(*conn);
         }
     }
 
-    void connectNextConnector(TConnectorShPtr<TElem> next)
+    void iterateNodes(std::function<void(TNode<TElem>&)> func)
     {
-        for (auto& conn : _next_connectors) {
-            if (conn == next.get()) {
-                // allready connected
-                return;
-            }
-        }
-        _next_connectors.push_back(next.get());
-
-        auto RemoveCircularOwnership = [&next](TNode<TElem>& node) {
-            if (node._owned_connector.get() == next.get()) {
-                node._owned_connector = nullptr;
-            }
-        };
-
-        iterateNodesBackwards(RemoveCircularOwnership);
-    }
-
-    size_t NDims() { return _values.NDims(); }
-
-    void connectPrevConnector(TConnectorShPtr<TElem> prev)
-    {
-        if (prev.get() == _prev_connector) {
-            return;
-        }
-        if (_prev_connector) {
-            throw std::invalid_argument(
-                "Node already connected to a previous connector");
-        }
-        _prev_connector  = prev.get();
-        _owned_connector = prev;
-    }
-
-    void
-    iterateConnectorsBackwards(std::function<void(TConnector<TElem>&)> func)
-    {
-        if (_prev_connector) {
-            _prev_connector->iterateConnectorsBackwards(this, func);
+        auto all_nodes = collectNodes();
+        for (auto& node : all_nodes) {
+            func(*node);
         }
     }
 
-    void iterateNodesBackwards(std::function<void(TNode<TElem>&)> func)
+    void iterateWeights(std::function<void(TNode<TElem>&)> func)
     {
-        _backward_calls++;
-        if (_prev_connector && (_backward_calls == _next_connectors.size() ||
-                                _next_connectors.empty())) {
-            func(*this);
-            _backward_calls = 0;
+        auto all_weights = collectWeights();
+        for (auto& weight : all_weights) {
+            func(*weight);
         }
-        if (_prev_connector) {
-            _prev_connector->iterateNodesBackwards(this, func);
-        }
+    }
+
+    std::set<TNodeShPtr<TElem>> collectNodes()
+    {
+        std::set<TNodeShPtr<TElem>> out;
+        collectNodesInternal(out);
+        return out;
+    }
+
+    std::set<TNodeShPtr<TElem>> collectWeights()
+    {
+        std::set<TNodeShPtr<TElem>> out;
+        collectWeightsInternal(out);
+        return out;
+    }
+
+    std::set<TConnectorShPtr<TElem>> collectConnectors()
+    {
+        std::set<TConnectorShPtr<TElem>> out;
+        collectConnectorsInternal(out);
+        return out;
     }
 
     TTensor<TElem>& values() { return _values; }
@@ -210,6 +217,8 @@ public:
 
     void setConstent(bool val) { _is_const = val; }
 
+    size_t NDims() { return _values.NDims(); }
+
 protected:
     TNode(const TNode&) = delete;
 
@@ -228,6 +237,51 @@ protected:
     }
 
     TNodeShPtr<TElem> getPtr() { return this->shared_from_this(); }
+
+    void connectNextConnector(TConnectorShPtr<TElem> next)
+    {
+        for (auto& conn : _next_connectors) {
+            if (conn == next.get()) {
+                // allready connected
+                return;
+            }
+        }
+        _next_connectors.push_back(next.get());
+
+        auto RemoveCircularOwnership = [&next](TNode<TElem>& node) {
+            if (node._owned_connector.get() == next.get()) {
+                node._owned_connector = nullptr;
+            }
+        };
+
+        iterateNodesBackwards(RemoveCircularOwnership);
+    }
+
+    void iterateNodesBackwards(std::function<void(TNode<TElem>&)> func)
+    {
+        _backward_calls++;
+        if (_prev_connector && (_backward_calls == _next_connectors.size() ||
+                                _next_connectors.empty())) {
+            func(*this);
+            _backward_calls = 0;
+        }
+        if (_prev_connector) {
+            _prev_connector->iterateNodesBackwards(this, func);
+        }
+    }
+
+    void connectPrevConnector(TConnectorShPtr<TElem> prev)
+    {
+        if (prev.get() == _prev_connector) {
+            return;
+        }
+        if (_prev_connector) {
+            throw std::invalid_argument(
+                "Node already connected to a previous connector");
+        }
+        _prev_connector  = prev.get();
+        _owned_connector = prev;
+    }
 };
 
 } // namespace snnl

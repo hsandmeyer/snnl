@@ -8,7 +8,7 @@
 #include <initializer_list>
 #include <memory>
 #include <numeric>
-#include <quadmath.h>
+#include <set>
 #include <stdexcept>
 #include <vector>
 
@@ -39,16 +39,6 @@ protected:
 
     TConnector() = default;
 
-public:
-    TConnector(const TConnector&) = delete;
-
-    template <template <class> class TChildConnector, typename... TArgs>
-    static ::std::shared_ptr<TChildConnector<TElem>> create(TArgs&&... args)
-    {
-        return std::shared_ptr<TChildConnector<TElem>>(
-            new TChildConnector<TElem>(::std::forward<TArgs>(args)...));
-    }
-
     virtual void forwardHandler(const std::vector<TNode<TElem>*>& input_nodes,
                                 const std::vector<TNode<TElem>*>& weights,
                                 TNode<TElem>* output_node) = 0;
@@ -62,15 +52,148 @@ public:
 
     virtual void buildHandler(bool, const std::vector<TNode<TElem>*>&){};
 
+public:
+    TConnector(const TConnector&) = delete;
+
+    template <template <class> class TChildConnector, typename... TArgs>
+    static ::std::shared_ptr<TChildConnector<TElem>> create(TArgs&&... args)
+    {
+        return std::shared_ptr<TChildConnector<TElem>>(
+            new TChildConnector<TElem>(::std::forward<TArgs>(args)...));
+    }
+
     virtual ~TConnector() {}
+
+    TConnectorShPtr<TElem> getPtr() { return this->shared_from_this(); }
+
+    TNode<TElem>* weight(size_t i) const { return _weights.at(i); }
+
+    std::vector<TNode<TElem>*> weights() const { return _weights; }
+
+    template <typename... TNodeShPtrs>
+    TNodeShPtr<TElem> connect(const TNodeShPtrs&... prev_nodes)
+    {
+        SNodeConnection nconn;
+        static_assert(sizeof...(TNodeShPtrs) > 0, "No input nodes provided");
+
+        for (auto node_ptr :
+             std::array<TNodeShPtr<TElem>, sizeof...(TNodeShPtrs)>{
+                 prev_nodes...}) {
+
+            if (std::find_if(_owned_nodes.begin(), _owned_nodes.end(),
+                             [&node_ptr](auto& elem) {
+                                 return node_ptr.get() == elem.get();
+                             }) == _owned_nodes.end()) {
+                _owned_nodes.push_back(node_ptr);
+            }
+
+            nconn.input_nodes.push_back(node_ptr.get());
+            node_ptr->connectNextConnector(getPtr());
+        }
+
+        build(nconn);
+
+        TIndex shape = outputDims(nconn.input_nodes);
+
+        TNodeShPtr<TElem> output = TNode<TElem>::create(shape);
+        nconn.output_node        = output.get();
+        output->connectPrevConnector(getPtr());
+        _node_connections.push_back(nconn);
+
+        return output;
+    }
+
+protected:
+    void forward(const TNode<TElem>* calling_node)
+    {
+
+        auto connections = getForwardNodeConnections(calling_node);
+
+        for (SNodeConnection* nconn : connections) {
+#ifdef DEBUG
+            if (!nconn->output_node) {
+                throw std::runtime_error("Output node is invalid");
+            }
+#endif
+
+            nconn->forward_calls++;
+
+            if (nconn->forward_calls == numCallingPrevNodes(*nconn)) {
+
+                nconn->output_node->setDims(outputDims(nconn->input_nodes));
+
+                forwardHandler(nconn->input_nodes, _weights,
+                               nconn->output_node);
+                nconn->output_node->forward();
+                nconn->forward_calls = 0;
+            }
+        }
+    }
+
+    void backward(const TNode<TElem>* calling_node)
+    {
+        SNodeConnection& nconn = getBackwardNodeConnection(calling_node);
+
+        backwardHandler(nconn.output_node, _weights, nconn.input_nodes);
+
+        for (auto& node : nconn.input_nodes) {
+            node->backward();
+        }
+    }
+
+    void build(const SNodeConnection& nconn)
+    {
+        if (!_was_build) {
+            buildHandler(_was_build, nconn.input_nodes);
+        }
+        _was_build = true;
+    }
+
+    void collectWeightsInternal(TNode<TElem>*                calling_node,
+                                std::set<TNodeShPtr<TElem>>& weights)
+    {
+        auto nconn = getBackwardNodeConnection(calling_node);
+        for (auto weight : _weights) {
+            weights.emplace(weight->getPtr());
+        }
+        for (auto& prev : nconn.input_nodes) {
+            prev->collectWeightsInternal(weights);
+        }
+    }
+
+    void collectNodesInternal(TNode<TElem>*                calling_node,
+                              std::set<TNodeShPtr<TElem>>& nodes)
+    {
+        auto nconn = getBackwardNodeConnection(calling_node);
+        for (auto& prev : nconn.input_nodes) {
+            prev->collectNodesInternal(nodes);
+        }
+    }
+
+    void collectConnectorsInternal(TNode<TElem>* calling_node,
+                                   std::set<TConnectorShPtr<TElem>>& connectors)
+    {
+        connectors.emplace(getPtr());
+        auto nconn = getBackwardNodeConnection(calling_node);
+        for (auto& prev : nconn.input_nodes) {
+            prev->collectNodesInternal(connectors);
+        }
+    }
+
+    void iterateNodesBackwards(TNode<TElem>*                      calling_node,
+                               std::function<void(TNode<TElem>&)> func)
+    {
+        auto nconn = getBackwardNodeConnection(calling_node);
+        for (auto& prev : nconn.input_nodes) {
+            prev->iterateNodesBackwards(func);
+        }
+    }
 
     TNodeShPtr<TElem>
     addWeightTensor(const std::initializer_list<size_t>& shape)
     {
         return addWeightTensor(TIndex{shape});
     }
-
-    TConnectorShPtr<TElem> getPtr() { return this->shared_from_this(); }
 
     template <typename TArray>
     TNodeShPtr<TElem> addWeightTensor(const TArray& shape)
@@ -124,130 +247,6 @@ public:
                 "Did not find forward calling node in any node connection");
         }
         return out;
-    }
-
-    void forward(const TNode<TElem>* calling_node)
-    {
-
-        auto connections = getForwardNodeConnections(calling_node);
-
-        for (SNodeConnection* nconn : connections) {
-#ifdef DEBUG
-            if (!nconn->output_node) {
-                throw std::runtime_error("Output node is invalid");
-            }
-#endif
-
-            nconn->forward_calls++;
-
-            if (nconn->forward_calls == numCallingPrevNodes(*nconn)) {
-
-                nconn->output_node->setDims(outputDims(nconn->input_nodes));
-
-                forwardHandler(nconn->input_nodes, _weights,
-                               nconn->output_node);
-                nconn->output_node->forward();
-                nconn->forward_calls = 0;
-            }
-        }
-    }
-
-    void backward(const TNode<TElem>* calling_node)
-    {
-        SNodeConnection& nconn = getBackwardNodeConnection(calling_node);
-
-        backwardHandler(nconn.output_node, _weights, nconn.input_nodes);
-
-        for (auto& node : nconn.input_nodes) {
-            node->backward();
-        }
-    }
-
-    void zeroGrad(const TNode<TElem>* calling_node)
-    {
-        SNodeConnection& nconn = getBackwardNodeConnection(calling_node);
-
-        _num_backward_calls++;
-        if (_num_backward_calls == _node_connections.size()) {
-            for (auto& weight : _weights) {
-                weight->gradient().setAllValues(0);
-            }
-            _num_backward_calls = 0;
-        }
-
-        for (auto& node : nconn.input_nodes) {
-            node->zeroGrad();
-        }
-    }
-
-    void build(const SNodeConnection& nconn)
-    {
-        if (!_was_build) {
-            buildHandler(_was_build, nconn.input_nodes);
-        }
-        _was_build = true;
-    }
-
-    TNode<TElem>* weight(size_t i) const { return _weights.at(i); }
-
-    std::vector<TNode<TElem>*> weights() const { return _weights; }
-
-    void iterateNodesBackwards(TNode<TElem>*                      calling_node,
-                               std::function<void(TNode<TElem>&)> func)
-    {
-        auto nconn = getBackwardNodeConnection(calling_node);
-        for (auto& prev : nconn.input_nodes) {
-            prev->iterateNodesBackwards(func);
-        }
-    }
-
-    void
-    iterateConnectorsBackwards(TNode<TElem>* calling_node,
-                               std::function<void(TConnector<TElem>&)> func)
-    {
-        _num_backward_calls++;
-        if (_num_backward_calls == _node_connections.size()) {
-            func(*this);
-            _num_backward_calls = 0;
-        }
-
-        auto nconn = getBackwardNodeConnection(calling_node);
-        for (auto& prev : nconn.input_nodes) {
-            prev->iterateConnectorsBackwards(func);
-        }
-    }
-
-    template <typename... TNodeShPtrs>
-    TNodeShPtr<TElem> connect(const TNodeShPtrs&... prev_nodes)
-    {
-        SNodeConnection nconn;
-        static_assert(sizeof...(TNodeShPtrs) > 0, "No input nodes provided");
-
-        for (auto node_ptr :
-             std::array<TNodeShPtr<TElem>, sizeof...(TNodeShPtrs)>{
-                 prev_nodes...}) {
-
-            if (std::find_if(_owned_nodes.begin(), _owned_nodes.end(),
-                             [&node_ptr](auto& elem) {
-                                 return node_ptr.get() == elem.get();
-                             }) == _owned_nodes.end()) {
-                _owned_nodes.push_back(node_ptr);
-            }
-
-            nconn.input_nodes.push_back(node_ptr.get());
-            node_ptr->connectNextConnector(getPtr());
-        }
-
-        build(nconn);
-
-        TIndex shape = outputDims(nconn.input_nodes);
-
-        TNodeShPtr<TElem> output = TNode<TElem>::create(shape);
-        nconn.output_node        = output.get();
-        output->connectPrevConnector(getPtr());
-        _node_connections.push_back(nconn);
-
-        return output;
     }
 };
 
@@ -539,16 +538,6 @@ public:
         return input_nodes.front()->shape();
     }
 
-    TElem preciseExp(TElem val)
-    {
-        if constexpr (std::is_same<TElem, __float128>::value) {
-            return expq(val);
-        }
-        else {
-            return std::exp(val);
-        }
-    }
-
     void forwardHandler(const std::vector<TNode<TElem>*>& input_nodes,
                         const std::vector<TNode<TElem>*>&,
                         TNode<TElem>* output_node) override
@@ -558,7 +547,7 @@ public:
         for (size_t ind = 0; ind < output_node->shapeFlattened(-1); ind++) {
             output_node->value(ind) =
                 static_cast<TElem>(1) /
-                (static_cast<TElem>(1) + preciseExp(-input_node->value(ind)));
+                (static_cast<TElem>(1) + std::exp(-input_node->value(ind)));
         }
     }
 
@@ -572,9 +561,9 @@ public:
         for (size_t ind = 0; ind < output_node->shapeFlattened(-1); ind++) {
             TElem input_value = input_node->value(ind);
             TElem output_grad = output_node->grad(ind);
-            TElem tmp         = preciseExp(-input_value) + 1;
+            TElem tmp         = std::exp(-input_value) + 1;
             input_node->grad(ind) +=
-                preciseExp(-input_value) / (tmp * tmp) * output_grad;
+                std::exp(-input_value) / (tmp * tmp) * output_grad;
         }
     }
 };
