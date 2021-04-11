@@ -214,13 +214,13 @@ public:
 
     bool isWeight() const { return _is_weight; }
 
-    bool isConstant() const { return _is_weight; }
+    bool isConstant() const { return _is_const; }
 
     bool isLeave() const { return _prev_connector == nullptr; }
 
     void setWeight(bool val) { _is_weight = val; }
 
-    void setConstent(bool val) { _is_const = val; }
+    void setConstant(bool val) { _is_const = val; }
 
     size_t NDims() { return _values.NDims(); }
 
