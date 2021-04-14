@@ -17,27 +17,7 @@ class TDenseConnector : public TConnector<TElem> {
     size_t _input_units = -1;
     size_t _output_units;
 
-    virtual void
-    buildHandler(bool                              was_build_before,
-                 const std::vector<TNode<TElem>*>& input_nodes) override
-    {
-
-        if (!was_build_before) {
-            if (_input_units == -1ul) {
-                _input_units = input_nodes.front()->shape(-1);
-            }
-            this->addWeightTensor({_output_units, _input_units});
-            this->addWeightTensor({_output_units});
-
-            _W = this->weight(0);
-            _B = this->weight(1);
-        }
-        else {
-            dimChecks(input_nodes);
-        }
-    }
-
-    void dimChecks(const std::vector<TNode<TElem>*>& input_nodes) const
+    void dimChecks(const std::vector<TNodeShPtr<TElem>>& input_nodes) const
     {
         if (input_nodes.size() > 1) {
             throw std::invalid_argument(
@@ -55,7 +35,7 @@ class TDenseConnector : public TConnector<TElem> {
     }
 
     TIndex
-    outputDims(const std::vector<TNode<TElem>*>& input_nodes) const override
+    outputDims(const std::vector<TNodeShPtr<TElem>>& input_nodes) const override
     {
         dimChecks(input_nodes);
 
@@ -64,9 +44,9 @@ class TDenseConnector : public TConnector<TElem> {
         return out_shape;
     }
 
-    void forwardHandler(const std::vector<TNode<TElem>*>& input_nodes,
-                        const std::vector<TNode<TElem>*>& weights,
-                        TNode<TElem>*                     output_node) override
+    void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
+                        const std::vector<TNodeShPtr<TElem>>& weights,
+                        TNode<TElem>* output_node) override
     {
 
         // std::cout << "FORWARD on dense layer" << std::endl;
@@ -113,9 +93,9 @@ class TDenseConnector : public TConnector<TElem> {
         }
     }
 
-    void backwardHandler(const TNode<TElem>*         output,
-                         std::vector<TNode<TElem>*>& weights,
-                         std::vector<TNode<TElem>*>& input_nodes) override
+    void backwardHandler(const TNode<TElem>*             output,
+                         std::vector<TNodeShPtr<TElem>>& weights,
+                         std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
         // std::cout << "BACKWARD on dense layer" << std::endl;
         dimChecks(input_nodes);
@@ -150,11 +130,15 @@ class TDenseConnector : public TConnector<TElem> {
         }
     }
 
-    TDenseConnector(size_t output_dim) : _output_units(output_dim) {}
-
     TDenseConnector(size_t input_dim, size_t output_dim)
         : _input_units(input_dim), _output_units(output_dim)
     {
+
+        this->addWeightTensor({_output_units, _input_units});
+        this->addWeightTensor({_output_units});
+
+        _W = this->weight(0).get();
+        _B = this->weight(1).get();
     }
 
 public:

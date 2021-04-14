@@ -5,75 +5,19 @@
 
 using namespace snnl;
 
-template <typename TElem>
-void compRel(TElem a, TElem b, TElem rel_prec)
-{
-    if (std::abs(a - b) / (std::max(a, b)) > rel_prec) {
-        std::cout << double(a) << " " << double(b) << " " << std::endl;
-        std::cout << "FAIL" << std::endl;
-    }
-}
-
-void test_node_grad(TNode<double>&                   node,
-                    std::vector<TNodeShPtr<double>>& inputs,
-                    TNodeShPtr<double>&              loss)
-{
-
-    node.values().forEach([&](const TIndex& index) {
-        double eps        = 1e-4;
-        double val_weight = node.value(index);
-
-        node.value(index) = val_weight + eps;
-        for (auto& input : inputs) {
-            input->forward();
-        }
-
-        double val_loss_up = loss->value(0);
-        node.value(index)  = val_weight - eps;
-
-        for (auto& input : inputs) {
-            input->forward();
-        }
-
-        double val_loss_down = loss->value(0);
-
-        node.value(index) = val_weight;
-
-        double numerical_grad = (val_loss_up - val_loss_down) / (2 * eps);
-
-        double grad = node.grad(index);
-
-        compRel(double(numerical_grad), double(grad), 1e-3);
-    });
-}
-
-void test_grad(std::vector<TNodeShPtr<double>> inputs, TNodeShPtr<double> loss)
-{
-    loss->iterateWeights(
-        [&](TNode<double>& weight) { test_node_grad(weight, inputs, loss); });
-    // for (auto& input : inputs) {
-    //    test_node_grad(*input, inputs, loss);
-    //}
-}
-
 int main()
 {
     TNodeShPtr<double> input = TNode<double>::create({4, 1});
 
     TConnectorShPtr<double> dense1 =
-        TConnector<double>::create<TDenseConnector>(64);
+        TConnector<double>::create<TDenseConnector>(1, 64);
     TConnectorShPtr<double> dense2 =
-        TConnector<double>::create<TDenseConnector>(16);
+        TConnector<double>::create<TDenseConnector>(64, 16);
     TConnectorShPtr<double> dense3 =
-        TConnector<double>::create<TDenseConnector>(1);
+        TConnector<double>::create<TDenseConnector>(16, 1);
     TConnectorShPtr<double> sigmoid =
         TConnector<double>::create<TSigmoidConnector>();
 
-    TNodeShPtr<double> out = dense1->connect(input);
-    out                    = sigmoid->connect(out);
-    out                    = dense2->connect(out);
-    out                    = sigmoid->connect(out);
-    out                    = dense3->connect(out);
     // out                    = sigmoid->connect(out);
 
     TNodeShPtr<double> correct = TNode<double>::create({4, 1});
@@ -81,14 +25,13 @@ int main()
 
     TConnectorShPtr<double> mse =
         TDenseConnector<double>::create<TMSEConnector>();
-    TNodeShPtr<double> loss = mse->connect(correct, out);
 
     dense1->weight(0)->values().uniform(-1, 1);
     dense1->weight(1)->values().uniform(-1, 1);
     dense2->weight(0)->values().uniform(-1, 1);
     dense2->weight(1)->values().uniform(-1, 1);
 
-    for (size_t step = 0; step < 100000; step++) {
+    for (size_t step = 0; step < 10000; step++) {
         input->values().uniform(-M_PI, M_PI);
 
         // std::cout << input->values() << std::endl;
@@ -98,7 +41,12 @@ int main()
             // correct->value(ind) = input->value(ind);
         }
 
-        input->forward();
+        TNodeShPtr<double> out  = dense1->call(input);
+        out                     = sigmoid->call(out);
+        out                     = dense2->call(out);
+        out                     = sigmoid->call(out);
+        out                     = dense3->call(out);
+        TNodeShPtr<double> loss = mse->call(correct, out);
 
         if (step % 500 == 0) {
             std::cout << loss->value(0) << " ";
@@ -112,10 +60,9 @@ int main()
             // correct->setDims({1, 1});
             for (int i = 0; i < 100; i++) {
                 double x = -M_PI + i * 2 * M_PI / 100.;
-                ;
                 fout << x << " " << std::sin(x) << " ";
                 input->value(0) = x;
-                input->forward();
+                // input->forward();
                 fout << out->value(0) << std::endl;
             }
             // input->setDims({4, 1});

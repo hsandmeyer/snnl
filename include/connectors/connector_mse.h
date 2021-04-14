@@ -12,7 +12,7 @@ public:
     }
 
     TIndex
-    outputDims(const std::vector<TNode<TElem>*>& input_nodes) const override
+    outputDims(const std::vector<TNodeShPtr<TElem>>& input_nodes) const override
     {
         if (input_nodes.size() != 2) {
             throw std::invalid_argument(
@@ -25,8 +25,8 @@ public:
         return TIndex{1};
     }
 
-    void forwardHandler(const std::vector<TNode<TElem>*>& input_nodes,
-                        const std::vector<TNode<TElem>*>&,
+    void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
+                        const std::vector<TNodeShPtr<TElem>>&,
                         TNode<TElem>* output_node) override
     {
 
@@ -42,8 +42,8 @@ public:
     }
 
     void backwardHandler(const TNode<TElem>* output_node,
-                         std::vector<TNode<TElem>*>&,
-                         std::vector<TNode<TElem>*>& input_nodes) override
+                         std::vector<TNodeShPtr<TElem>>&,
+                         std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
         auto  input_0  = input_nodes[0];
         auto  input_1  = input_nodes[1];

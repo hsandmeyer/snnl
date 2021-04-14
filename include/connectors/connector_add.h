@@ -11,7 +11,7 @@ public:
     }
 
     TIndex
-    outputDims(const std::vector<TNode<TElem>*>& input_nodes) const override
+    outputDims(const std::vector<TNodeShPtr<TElem>>& input_nodes) const override
     {
         TIndex out_shape = input_nodes.front()->shape();
 
@@ -24,8 +24,8 @@ public:
         return out_shape;
     }
 
-    void forwardHandler(const std::vector<TNode<TElem>*>& input_nodes,
-                        const std::vector<TNode<TElem>*>&,
+    void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
+                        const std::vector<TNodeShPtr<TElem>>&,
                         TNode<TElem>* output_node) override
     {
         // std::cout << "FORWARD on Add layer" << std::endl;
@@ -39,8 +39,8 @@ public:
     }
 
     void backwardHandler(const TNode<TElem>* output_node,
-                         std::vector<TNode<TElem>*>&,
-                         std::vector<TNode<TElem>*>& input_nodes) override
+                         std::vector<TNodeShPtr<TElem>>&,
+                         std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
         // std::cout << "BACKWARD on add layer" << std::endl;
         for (auto& input_node_ptr : input_nodes) {

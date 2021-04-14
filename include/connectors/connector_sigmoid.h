@@ -12,7 +12,7 @@ public:
     }
 
     TIndex
-    outputDims(const std::vector<TNode<TElem>*>& input_nodes) const override
+    outputDims(const std::vector<TNodeShPtr<TElem>>& input_nodes) const override
     {
         if (input_nodes.size() > 1) {
             throw std::invalid_argument(
@@ -21,12 +21,12 @@ public:
         return input_nodes.front()->shape();
     }
 
-    void forwardHandler(const std::vector<TNode<TElem>*>& input_nodes,
-                        const std::vector<TNode<TElem>*>&,
+    void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
+                        const std::vector<TNodeShPtr<TElem>>&,
                         TNode<TElem>* output_node) override
     {
         // std::cout << "FORWARD on Sigmoid layer" << std::endl;
-        TNode<TElem>* input_node = input_nodes.front();
+        TNodeShPtr<TElem> input_node = input_nodes.front();
         for (size_t ind = 0; ind < output_node->shapeFlattened(-1); ind++) {
             output_node->value(ind) =
                 static_cast<TElem>(1) /
@@ -35,11 +35,11 @@ public:
     }
 
     void backwardHandler(const TNode<TElem>* output_node,
-                         std::vector<TNode<TElem>*>&,
-                         std::vector<TNode<TElem>*>& input_nodes) override
+                         std::vector<TNodeShPtr<TElem>>&,
+                         std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
         // std::cout << "BACKWARD on sigmoid layer" << std::endl;
-        TNode<TElem>* input_node = input_nodes.front();
+        TNodeShPtr<TElem> input_node = input_nodes.front();
 
         for (size_t ind = 0; ind < output_node->shapeFlattened(-1); ind++) {
             TElem input_value = input_node->value(ind);
