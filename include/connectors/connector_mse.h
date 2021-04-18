@@ -58,9 +58,11 @@ public:
 };
 
 template <class TElem>
-TNodeShPtr<TElem> MSE(const TNodeShPtr<TElem>& node)
+TNodeShPtr<TElem> MSE(const TNodeShPtr<TElem>& model_output,
+                      const TNodeShPtr<TElem>& correct)
 {
-    return TConnector<TElem>::template apply<TMSEConnector>(node);
+    return TConnector<TElem>::template apply<TMSEConnector>(model_output,
+                                                            correct);
 }
 
 } // namespace snnl
