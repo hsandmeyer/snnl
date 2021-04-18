@@ -1,4 +1,4 @@
-#include "common_connectors.h"
+#include "common_modules.h"
 #include "forward_declare.h"
 #include "node.h"
 #include <gtest/gtest-param-test.h>
@@ -21,10 +21,12 @@ TEST_P(OneDenseConnectorTest, input_shape)
 
     input->values().rangeAllDims(-1, 0, 2);
 
-    TConnectorShPtr<float> encode =
-        TConnector<float>::create<TDenseConnector>(shape.back(), 32ul);
+    TDenseModuleShPtr<float> encode =
+        TModule<float>::create<TDenseModule>(shape.back(), 32ul);
 
-    auto weights = encode->weight(0);
+    auto weights = encode->W();
+    auto bias    = encode->B();
+
     weights->setAllValues(0);
 
     for (size_t i = 0; i < std::min(weights->shape(0), weights->shape(1));
@@ -32,7 +34,6 @@ TEST_P(OneDenseConnectorTest, input_shape)
         weights->value(i, i) = 1;
     }
 
-    auto bias = encode->weight(1);
     bias->setAllValues(1);
 
     TNodeShPtr<float> out = encode->call(input);
@@ -48,29 +49,28 @@ TEST_P(MultiDenseConnectorTest, input_shape)
 {
     auto shape = GetParam();
 
-    TNodeShPtr<float>      input = TNode<float>::create(shape);
-    TConnectorShPtr<float> encode =
-        TConnector<float>::create<TDenseConnector>(shape.back(), 32ul);
-    TConnectorShPtr<float> decode =
-        TConnector<float>::create<TDenseConnector>(32ul, 128ul);
+    TNodeShPtr<float>        input = TNode<float>::create(shape);
+    TDenseModuleShPtr<float> encode =
+        TModule<float>::create<TDenseModule>(shape.back(), 32ul);
+    TDenseModuleShPtr<float> decode =
+        TModule<float>::create<TDenseModule>(32ul, 128ul);
 
     input->values().setAllValues(1);
 
-    encode->weight(0)->setAllValues(1);
-    encode->weight(1)->setAllValues(1);
+    encode->W()->setAllValues(1);
+    encode->B()->setAllValues(1);
 
-    decode->weight(0)->setAllValues(1);
-    decode->weight(1)->setAllValues(1);
+    decode->W()->setAllValues(1);
+    decode->B()->setAllValues(1);
 
     TNodeShPtr<float> out = encode->call(input);
     out                   = decode->call(out);
 
     out->values().forEach([&](const TIndex& index) {
         if (!this->HasFatalFailure()) {
-            ASSERT_FLOAT_EQ(decode->weight(0)->shape(1) *
-                                    (encode->weight(0)->shape(1) + 1) +
-                                1,
-                            out->value(index));
+            ASSERT_FLOAT_EQ(
+                decode->W()->shape(1) * (encode->W()->shape(1) + 1) + 1,
+                out->value(index));
         }
     });
 }
@@ -109,7 +109,7 @@ TEST(OwnershipTransfer, linear)
 TEST(ComplexGraph, complex_graph)
 {
 
-    auto dense_1 = TConnector<float>::create<TDenseConnector>(2, 2);
+    auto dense_1 = TModule<float>::create<TDenseModule>(2, 2);
 
     TConnectorShPtr<float> sigmoid =
         TConnector<float>::create<TSigmoidConnector>();
@@ -124,8 +124,8 @@ TEST(ComplexGraph, complex_graph)
     input_1->values().setFlattenedValues({1, 2, 3, 4});
     input_2->values().setFlattenedValues({3.141, 1.414, 0., 42.});
 
-    dense_1->W().setFlattenedValues({1, -1, -1, 2});
-    dense_1->B().setFlattenedValues({-2.5, 2.5});
+    dense_1->W()->values().setFlattenedValues({1, -1, -1, 2});
+    dense_1->B()->values().setFlattenedValues({-2.5, 2.5});
 
     // Dense connector
     auto tmp_1_0 = dense_1->call(input_1);

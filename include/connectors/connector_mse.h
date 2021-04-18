@@ -26,7 +26,6 @@ public:
     }
 
     void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
-                        const std::vector<TNodeShPtr<TElem>>&,
                         TNode<TElem>* output_node) override
     {
 
@@ -41,8 +40,7 @@ public:
         output_node->value(0) /= input_0.shapeFlattened(-1);
     }
 
-    void backwardHandler(const TNode<TElem>* output_node,
-                         std::vector<TNodeShPtr<TElem>>&,
+    void backwardHandler(const TNode<TElem>*             output_node,
                          std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
         auto  input_0  = input_nodes[0];
@@ -58,5 +56,11 @@ public:
         }
     }
 };
+
+template <class TElem>
+TNodeShPtr<TElem> MSE(const TNodeShPtr<TElem>& node)
+{
+    return TConnector<TElem>::template apply<TMSEConnector>(node);
+}
 
 } // namespace snnl

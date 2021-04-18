@@ -57,9 +57,11 @@ public:
     static ::std::shared_ptr<TNode> create(TArgs&&... args)
     {
         return ::std::shared_ptr<TNode>(
-            new TNode(::std::forward<TArgs>(args)...));
+            new TNode(std::forward<TArgs>(args)...));
     }
-    static ::std::shared_ptr<TNode> create(std::initializer_list<TElem> shape)
+
+    static ::std::shared_ptr<TNode>
+    create(const std::initializer_list<TElem> shape)
     {
         return ::std::shared_ptr<TNode>(new TNode(shape));
     }

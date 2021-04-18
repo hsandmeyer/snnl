@@ -8,29 +8,25 @@ class TDenseConnector : public TConnector<TElem> {
 
     friend class TConnector<TElem>;
 
-    TNode<TElem>* _W;
-    TNode<TElem>* _B;
-
-    std::vector<TNode<TElem>*> _inputs;
-    std::vector<TNode<TElem>*> _outputs;
-
-    size_t _input_units = -1;
-    size_t _output_units;
-
     void dimChecks(const std::vector<TNodeShPtr<TElem>>& input_nodes) const
     {
-        if (input_nodes.size() > 1) {
+        size_t input_units  = input_nodes.at(0)->shape(-1);
+        size_t output_units = input_nodes.at(0)->shape(-2);
+        if (input_nodes.size() != 3) {
             throw std::invalid_argument(
-                "Maximal one input node per call for dense layer");
+                "Need weight, bias and input node for dense layer");
         }
-        if (input_nodes.empty()) {
-            throw std::invalid_argument("No input nodes provided");
-        }
-        if (_input_units != input_nodes.front()->shape(-1)) {
+        if (output_units != input_nodes.at(1)->shape(0)) {
             throw std::invalid_argument(
-                "Output dimsion of previous node (" +
-                std::to_string(input_nodes.front()->shape(-1)) +
-                ") != " + std::to_string(_input_units));
+                "Mismatch of output dimension of b (second input)" +
+                std::to_string(input_nodes.at(1)->shape(0)) +
+                "!=" + std::to_string(output_units));
+        }
+        if (input_units != input_nodes.at(2)->shape(-1)) {
+            throw std::invalid_argument(
+                "Mismatch of output dimension of x (third input)" +
+                std::to_string(input_nodes.at(2)->shape(-1)) +
+                "!=" + std::to_string(input_units));
         }
     }
 
@@ -39,35 +35,34 @@ class TDenseConnector : public TConnector<TElem> {
     {
         dimChecks(input_nodes);
 
-        TIndex out_shape = input_nodes.front()->shape();
-        out_shape[-1]    = _output_units;
+        TIndex out_shape = input_nodes.back()->shape();
+        out_shape[-1]    = input_nodes.front()->shape(-2);
         return out_shape;
     }
 
     void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
-                        const std::vector<TNodeShPtr<TElem>>& weights,
                         TNode<TElem>* output_node) override
     {
 
         // std::cout << "FORWARD on dense layer" << std::endl;
         dimChecks(input_nodes);
 
-        auto& input  = input_nodes.front()->values();
         auto& output = output_node->values();
 
-        TNode<TElem>& W = *weights.at(0);
-        TNode<TElem>& B = *weights.at(1);
+        TNode<TElem>& W = *input_nodes.at(0);
+        TNode<TElem>& B = *input_nodes.at(1);
+        TNode<TElem>& x = *input_nodes.at(2);
 
-        if (input.NDims() > 1) {
+        if (x.NDims() > 1) {
             // TODO Generalize this using a better tensor loop with some
             // kind of ellipsis object
-            for (size_t higherDim = 0; higherDim < input.shapeFlattened(-2);
+            for (size_t higherDim = 0; higherDim < x.shapeFlattened(-2);
                  higherDim++) {
                 for (size_t i = 0; i < output.shape(-1); i++) {
                     output(higherDim, i) = B.value(i);
-                    for (size_t j = 0; j < input.shape(-1); j++) {
+                    for (size_t j = 0; j < x.shape(-1); j++) {
                         output(higherDim, i) +=
-                            W.value(i, j) * input(higherDim, j);
+                            W.value(i, j) * x.value(higherDim, j);
                     }
                 }
             }
@@ -76,9 +71,9 @@ class TDenseConnector : public TConnector<TElem> {
                 int i          = ind_in[-1];
                 output(ind_in) = _B->value(i);
                 auto ind_out   = ind_in;
-                for (size_t j = 0; j < input.shape(-1); j++) {
+                for (size_t j = 0; j < x.shape(-1); j++) {
                     ind_out[-1] = j;
-                    output(ind_in) += _W->value(i, j) * input(ind_out);
+                    output(ind_in) += _W->value(i, j) * x(ind_out);
                 }
             });
             */
@@ -86,35 +81,33 @@ class TDenseConnector : public TConnector<TElem> {
         else {
             for (size_t i = 0; i < output.shape(-1); i++) {
                 output(i) = B.value(i);
-                for (size_t j = 0; j < input.shape(-1); j++) {
-                    output(i) += W.value(i, j) * input(j);
+                for (size_t j = 0; j < x.shape(-1); j++) {
+                    output(i) += W.value(i, j) * x.value(j);
                 }
             }
         }
     }
 
     void backwardHandler(const TNode<TElem>*             output,
-                         std::vector<TNodeShPtr<TElem>>& weights,
                          std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
         // std::cout << "BACKWARD on dense layer" << std::endl;
         dimChecks(input_nodes);
 
-        auto& input = input_nodes.front();
+        TNode<TElem>& W = *input_nodes.at(0);
+        TNode<TElem>& B = *input_nodes.at(1);
+        TNode<TElem>& x = *input_nodes.at(2);
 
-        TNode<TElem>& W = *weights.at(0);
-        TNode<TElem>& B = *weights.at(1);
-
-        if (input->NDims() > 1) {
-            for (size_t higherDim = 0; higherDim < input->shapeFlattened(-2);
+        if (x.NDims() > 1) {
+            for (size_t higherDim = 0; higherDim < x.shapeFlattened(-2);
                  higherDim++) {
                 for (size_t i = 0; i < output->shape(-1); i++) {
                     B.grad(i) += output->grad(higherDim, i);
-                    for (size_t j = 0; j < input->shape(-1); j++) {
-                        input->grad(higherDim, j) +=
+                    for (size_t j = 0; j < x.shape(-1); j++) {
+                        x.grad(higherDim, j) +=
                             W.value(i, j) * output->grad(higherDim, i);
-                        W.grad(i, j) += input->value(higherDim, j) *
-                                        output->grad(higherDim, i);
+                        W.grad(i, j) +=
+                            x.value(higherDim, j) * output->grad(higherDim, i);
                     }
                 }
             }
@@ -122,47 +115,27 @@ class TDenseConnector : public TConnector<TElem> {
         else {
             for (size_t i = 0; i < output->shape(-1); i++) {
                 B.grad(i) += output->grad(i);
-                for (size_t j = 0; j < input->shape(-1); j++) {
-                    input->grad(j) += W.value(i, j) * output->grad(i);
-                    W.grad(i, j) += input->value(j) * output->grad(i);
+                for (size_t j = 0; j < x.shape(-1); j++) {
+                    x.grad(j) += W.value(i, j) * output->grad(i);
+                    W.grad(i, j) += x.value(j) * output->grad(i);
                 }
             }
         }
     }
 
-    TDenseConnector(size_t input_dim, size_t output_dim)
-        : _input_units(input_dim), _output_units(output_dim)
-    {
-
-        this->addWeightTensor({_output_units, _input_units});
-        this->addWeightTensor({_output_units});
-
-        _W = this->weight(0).get();
-        _B = this->weight(1).get();
-    }
-
 public:
-    TTensor<TElem>& W()
-    {
-        if (!_W) {
-            throw std::runtime_error(
-                "Weights for dense layer not initialized. Connect layer first");
-        }
-        return _W->values();
-    }
-
-    TTensor<TElem>& B()
-    {
-        if (!_B) {
-            throw std::runtime_error(
-                "Weights for dense layer not initialized. Connect layer first");
-        }
-        return _B->values();
-    }
     virtual ~TDenseConnector()
     {
         std::cout << "Destroying Dense Connector" << std::endl;
     }
 };
+
+template <class TElem>
+TNodeShPtr<TElem> Dense(const TNodeShPtr<TElem>& W, const TNodeShPtr<TElem>& b,
+                        const TNodeShPtr<TElem>& x)
+{
+    return TConnector<TElem>::template apply<TDenseConnector>(
+        std::move(W), std::move(b), std::move(x));
+}
 
 } // namespace snnl

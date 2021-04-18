@@ -25,7 +25,6 @@ public:
     }
 
     void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
-                        const std::vector<TNodeShPtr<TElem>>&,
                         TNode<TElem>* output_node) override
     {
         // std::cout << "FORWARD on Add layer" << std::endl;
@@ -38,8 +37,7 @@ public:
         }
     }
 
-    void backwardHandler(const TNode<TElem>* output_node,
-                         std::vector<TNodeShPtr<TElem>>&,
+    void backwardHandler(const TNode<TElem>*             output_node,
                          std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
         // std::cout << "BACKWARD on add layer" << std::endl;
@@ -51,5 +49,11 @@ public:
         }
     }
 };
+
+template <class TElem, class... TArgs>
+TNodeShPtr<TElem> Add(const TNodeShPtr<TElem>& node, const TArgs&... args)
+{
+    return TConnector<TElem>::template apply<TAddConnector>(node, args...);
+}
 
 } // namespace snnl

@@ -22,7 +22,6 @@ public:
     }
 
     void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
-                        const std::vector<TNodeShPtr<TElem>>&,
                         TNode<TElem>* output_node) override
     {
         // std::cout << "FORWARD on Sigmoid layer" << std::endl;
@@ -34,8 +33,7 @@ public:
         }
     }
 
-    void backwardHandler(const TNode<TElem>* output_node,
-                         std::vector<TNodeShPtr<TElem>>&,
+    void backwardHandler(const TNode<TElem>*             output_node,
                          std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
         // std::cout << "BACKWARD on sigmoid layer" << std::endl;
@@ -50,5 +48,11 @@ public:
         }
     }
 };
+
+template <class TElem>
+TNodeShPtr<TElem> Sigmoid(const TNodeShPtr<TElem>& node)
+{
+    return TConnector<TElem>::template apply<TSigmoidConnector>(node);
+}
 
 } // namespace snnl

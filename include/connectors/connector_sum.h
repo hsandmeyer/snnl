@@ -1,5 +1,6 @@
 #pragma once
 #include "connector.h"
+#include "forward_declare.h"
 
 namespace snnl {
 
@@ -22,7 +23,6 @@ public:
     }
 
     void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
-                        const std::vector<TNodeShPtr<TElem>>&,
                         TNode<TElem>* output_node) override
     {
         // std::cout << "FORWARD on Sum layer" << std::endl;
@@ -33,8 +33,7 @@ public:
             input_nodes.front()->values().end(), static_cast<TElem>(0));
     }
 
-    void backwardHandler(const TNode<TElem>* output_node,
-                         std::vector<TNodeShPtr<TElem>>&,
+    void backwardHandler(const TNode<TElem>*             output_node,
                          std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
         // std::cout << "BACKWARD on sum layer" << std::endl;
@@ -44,5 +43,11 @@ public:
         }
     }
 };
+
+template <class TElem>
+TNodeShPtr<TElem> Sum(const TNodeShPtr<TElem>& node)
+{
+    return TConnector<TElem>::template apply<TSumConnector>(node);
+}
 
 } // namespace snnl

@@ -1,4 +1,4 @@
-#include "common_connectors.h"
+#include "common_modules.h"
 #include "forward_declare.h"
 #include "node.h"
 #include <fstream>
@@ -9,16 +9,9 @@ int main()
 {
     TNodeShPtr<double> input = TNode<double>::create({4, 1});
 
-    TConnectorShPtr<double> dense1 =
-        TConnector<double>::create<TDenseConnector>(1, 64);
-    TConnectorShPtr<double> dense2 =
-        TConnector<double>::create<TDenseConnector>(64, 16);
-    TConnectorShPtr<double> dense3 =
-        TConnector<double>::create<TDenseConnector>(16, 1);
-    TConnectorShPtr<double> sigmoid =
-        TConnector<double>::create<TSigmoidConnector>();
-
-    // out                    = sigmoid->connect(out);
+    TDenseModule<double> dense1(1, 64);
+    TDenseModule<double> dense2(64, 16);
+    TDenseModule<double> dense3(16, 1);
 
     TNodeShPtr<double> correct = TNode<double>::create({4, 1});
     correct->setConstant(true);
@@ -26,10 +19,10 @@ int main()
     TConnectorShPtr<double> mse =
         TDenseConnector<double>::create<TMSEConnector>();
 
-    dense1->weight(0)->values().uniform(-1, 1);
-    dense1->weight(1)->values().uniform(-1, 1);
-    dense2->weight(0)->values().uniform(-1, 1);
-    dense2->weight(1)->values().uniform(-1, 1);
+    dense1.W()->values().uniform(-1, 1);
+    dense1.B()->values().uniform(-1, 1);
+    dense2.W()->values().uniform(-1, 1);
+    dense2.B()->values().uniform(-1, 1);
 
     for (size_t step = 0; step < 10000; step++) {
         input->values().uniform(-M_PI, M_PI);
@@ -41,11 +34,11 @@ int main()
             // correct->value(ind) = input->value(ind);
         }
 
-        TNodeShPtr<double> out  = dense1->call(input);
-        out                     = sigmoid->call(out);
-        out                     = dense2->call(out);
-        out                     = sigmoid->call(out);
-        out                     = dense3->call(out);
+        TNodeShPtr<double> out  = dense1.call(input);
+        out                     = Sigmoid(out);
+        out                     = dense2.call(out);
+        out                     = Sigmoid(out);
+        out                     = dense3.call(out);
         TNodeShPtr<double> loss = mse->call(correct, out);
 
         if (step % 500 == 0) {

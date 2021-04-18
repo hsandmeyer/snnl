@@ -1,7 +1,9 @@
 #include "common_connectors.h"
-#include "connectors/connector_dense.h"
+#include "connectors/connector_sigmoid.h"
+#include "connectors/connector_sum.h"
 #include "forward_declare.h"
-#include "model.h"
+#include "module.h"
+#include "modules/module_dense.h"
 #include "node.h"
 #include <gtest/gtest-param-test.h>
 #include <gtest/gtest.h>
@@ -18,7 +20,7 @@ void compRel(TElem a, TElem b, TElem rel_prec)
     }
 }
 
-void test_node_grad(TNode<double>& node, TModel<double>& model,
+void test_node_grad(TNode<double>& node, TModule<double>& model,
                     std::vector<TNodeShPtr<double>>& inputs)
 {
 
@@ -43,11 +45,11 @@ void test_node_grad(TNode<double>& node, TModel<double>& model,
 
         double grad = node.grad(index);
 
-        compRel(double(numerical_grad), double(grad), 1e-3);
+        compRel(double(numerical_grad), double(grad), 1e-5);
     });
 }
 
-void test_grad(TModel<double>& model, std::vector<TNodeShPtr<double>> inputs)
+void test_grad(TModule<double>& model, std::vector<TNodeShPtr<double>> inputs)
 {
     auto loss = model.call(inputs);
     loss->iterateWeights(
@@ -63,26 +65,20 @@ class LinearConnectorTest
 
 TEST_P(LinearConnectorTest, input_shape)
 {
-    struct LinearModel : TModel<double> {
-        TConnectorShPtr<double> dense;
-        TConnectorShPtr<double> sigmoid;
-        TConnectorShPtr<double> sum;
+    struct LinearModel : public TModule<double> {
+        std::shared_ptr<TDenseModule<double>> dense;
 
         LinearModel(std::vector<size_t> shape)
         {
-
-            dense   = registerConnector<TDenseConnector>(shape.back(), 32ul);
-            sigmoid = registerConnector<TSigmoidConnector>();
-            sum     = registerConnector<TSumConnector>();
+            dense = this->addModule<TDenseModule>(shape.back(), 8ul);
         }
 
         virtual TNodeShPtr<double>
-        call(std::vector<TNodeShPtr<double>> inputs) override
+        callHandler(std::vector<TNodeShPtr<double>> inputs) override
         {
             TNodeShPtr<double> tmp = dense->call(inputs.at(0));
-            tmp                    = sigmoid->call(tmp);
-
-            return sum->call(tmp);
+            tmp                    = Sigmoid(tmp);
+            return Sum(tmp);
         }
     };
 
@@ -93,10 +89,10 @@ TEST_P(LinearConnectorTest, input_shape)
 
     LinearModel model(shape);
 
-    model.dense->weight(0)->values().uniform();
-    model.dense->weight(1)->values().uniform();
+    model.dense->W()->values().uniform();
+    model.dense->B()->values().uniform();
 
-    TNodeShPtr<double> out = model.call({input});
+    TNodeShPtr<double> out = model.call(input);
 
     out->zeroGrad();
     out->computeGrad();
@@ -109,10 +105,10 @@ TEST_P(LinearConnectorTest, input_shape)
 }
 
 INSTANTIATE_TEST_SUITE_P(BackwardTests, LinearConnectorTest,
-                         ::testing::Values(std::vector<size_t>{32},
-                                           std::vector<size_t>{1, 32},
-                                           std::vector<size_t>{2, 32},
-                                           std::vector<size_t>{2, 3, 16}));
+                         ::testing::Values(std::vector<size_t>{8},
+                                           std::vector<size_t>{1, 8},
+                                           std::vector<size_t>{2, 8},
+                                           std::vector<size_t>{2, 3, 8}));
 
 class SkipConnectorTest : public ::testing::TestWithParam<std::vector<size_t>> {
 };
@@ -120,35 +116,28 @@ class SkipConnectorTest : public ::testing::TestWithParam<std::vector<size_t>> {
 TEST_P(SkipConnectorTest, input_shape)
 {
 
-    struct SkipModel : TModel<double> {
-        TConnectorShPtr<double> dense_1;
-        TConnectorShPtr<double> dense_2;
-        TConnectorShPtr<double> sigmoid;
-        TConnectorShPtr<double> add;
-        TConnectorShPtr<double> sum;
+    struct SkipModel : TModule<double> {
+        TDenseModuleShPtr<double> dense_1;
+        TDenseModuleShPtr<double> dense_2;
 
         SkipModel(std::vector<size_t> shape)
         {
-
-            dense_1 = registerConnector<TDenseConnector>(shape.back(), 32ul);
-            dense_2 = registerConnector<TDenseConnector>(shape.back(), 32ul);
-            sigmoid = registerConnector<TSigmoidConnector>();
-            sum     = registerConnector<TSumConnector>();
-            add     = registerConnector<TAddConnector>();
+            dense_1 = addModule<TDenseModule>(shape.back(), 8ul);
+            dense_2 = addModule<TDenseModule>(shape.back(), 8ul);
         }
 
         virtual TNodeShPtr<double>
-        call(std::vector<TNodeShPtr<double>> inputs) override
+        callHandler(std::vector<TNodeShPtr<double>> inputs) override
         {
             TNodeShPtr<double> tmp_1 = dense_1->call(inputs[0]);
-            tmp_1                    = sigmoid->call(tmp_1);
+            tmp_1                    = Sigmoid(tmp_1);
 
             TNodeShPtr<double> tmp_2 = dense_2->call(tmp_1);
-            tmp_2                    = sigmoid->call(tmp_2);
+            tmp_2                    = Sigmoid(tmp_2);
 
-            TNodeShPtr<double> comb = add->call(tmp_1, tmp_2);
+            TNodeShPtr<double> comb = Add(tmp_1, tmp_2);
 
-            return sum->call(comb);
+            return Sum(comb);
         }
     };
 
@@ -158,12 +147,12 @@ TEST_P(SkipConnectorTest, input_shape)
     input->values().uniform();
     SkipModel model(shape);
 
-    model.dense_1->weight(0)->values().uniform();
-    model.dense_1->weight(1)->values().uniform();
-    model.dense_2->weight(0)->values().uniform();
-    model.dense_2->weight(1)->values().uniform();
+    model.dense_1->W()->values().uniform();
+    model.dense_1->B()->values().uniform();
+    model.dense_2->W()->values().uniform();
+    model.dense_2->B()->values().uniform();
 
-    auto out = model.call({input});
+    auto out = model.call(input);
 
     out->zeroGrad();
     out->computeGrad();
@@ -176,68 +165,59 @@ TEST_P(SkipConnectorTest, input_shape)
 }
 
 INSTANTIATE_TEST_SUITE_P(BackwardTests, SkipConnectorTest,
-                         ::testing::Values(std::vector<size_t>{32},
-                                           std::vector<size_t>{1, 32},
-                                           std::vector<size_t>{2, 32},
-                                           std::vector<size_t>{2, 3, 32}));
+                         ::testing::Values(std::vector<size_t>{8},
+                                           std::vector<size_t>{1, 8},
+                                           std::vector<size_t>{2, 8},
+                                           std::vector<size_t>{2, 3, 8}));
 
 TEST(BackwardTests, ComplexGraph)
 {
 
-    struct ComplexModel : TModel<double> {
-        std::shared_ptr<TDenseConnector<double>> dense;
-        TConnectorShPtr<double>                  sigmoid;
-        TConnectorShPtr<double>                  add;
-        TConnectorShPtr<double>                  sum;
+    struct ComplexModel : TModule<double> {
+        TDenseModuleShPtr<double> dense;
 
-        ComplexModel()
-        {
-            dense   = registerConnector<TDenseConnector>(16ul, 16ul);
-            sigmoid = registerConnector<TSigmoidConnector>();
-            sum     = registerConnector<TSumConnector>();
-            add     = registerConnector<TAddConnector>();
-        }
+        ComplexModel() { dense = addModule<TDenseModule>(8ul, 8ul); }
 
         virtual TNodeShPtr<double>
-        call(std::vector<TNodeShPtr<double>> inputs) override
+        callHandler(std::vector<TNodeShPtr<double>> inputs) override
         {
             auto tmp_1_0 = dense->call(inputs[0]);
-            tmp_1_0      = sigmoid->call(tmp_1_0);
+            tmp_1_0      = Sigmoid(tmp_1_0);
 
             // Reuse same callor
             auto tmp_1_1 = dense->call(tmp_1_0);
-            tmp_1_1      = sigmoid->call(tmp_1_1);
+            tmp_1_1      = Sigmoid(tmp_1_1);
 
             // Reuse same callor on other input
             auto tmp_2_0 = dense->call(inputs[1]);
-            tmp_2_0      = sigmoid->call(tmp_2_0);
+            tmp_2_0      = Sigmoid(tmp_2_0);
 
             // Skip callion by addition
-            auto tmp_1_3 = add->call(tmp_1_1, tmp_1_0);
+            auto tmp_1_3 = Add(tmp_1_1, tmp_1_0);
             // Another skip callion
-            auto tmp_1_4 = add->call(tmp_1_3, tmp_1_0);
+            auto tmp_1_4 = Add(tmp_1_3, tmp_1_0);
 
             // combine two inputs
-            auto combined = add->call(tmp_1_4, tmp_2_0);
+            auto combined = Add(tmp_1_4, tmp_2_0);
 
             // Sum batches
-            return sum->call(combined);
+            return Sum(combined);
         }
     };
 
     ComplexModel model;
 
     // Two inputs
-    TNodeShPtr<double> input_1 = TNode<double>::create({16, 16});
-    TNodeShPtr<double> input_2 = TNode<double>::create({16, 16});
+    TNodeShPtr<double> input_1 = TNode<double>::create({4, 8});
+    TNodeShPtr<double> input_2 = TNode<double>::create({4, 8});
 
     input_1->values().uniform();
     input_2->values().uniform();
 
-    model.dense->W().uniform();
-    model.dense->B().uniform();
+    model.dense->W()->values().uniform();
+    model.dense->B()->values().uniform();
 
-    auto res = model.call({input_1, input_2});
+    auto res = model.call(input_1, input_2);
 
     res->zeroGrad();
     res->computeGrad();
