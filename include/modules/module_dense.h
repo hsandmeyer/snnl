@@ -21,6 +21,9 @@ public:
     {
         _W = this->addWeight({_output_units, _input_units});
         _B = this->addWeight({_output_units});
+
+        _W->values().xavier(_input_units, _output_units);
+        _B->setAllValues(0);
     }
 
     virtual TNodeShPtr<TElem>

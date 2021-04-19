@@ -324,13 +324,28 @@ public:
 
     void setAllValues(TElem value) { std::fill(begin(), end(), value); }
 
-    // TODO: Xavier initialization
+    void normal(TElem mean = 0, TElem stddev = 1)
+    {
+        std::normal_distribution<double> dist(mean, stddev);
+        for (auto& val : *this) {
+            val = static_cast<TElem>(dist(_rng));
+        }
+    }
+
     void uniform(TElem min = -1, TElem max = 1)
     {
         std::uniform_real_distribution<double> dist(min, max);
         for (auto& val : *this) {
             val = static_cast<TElem>(dist(_rng));
         }
+    }
+
+    void xavier(size_t input_units, size_t output_units)
+    {
+        TElem xav_max =
+            std::sqrt(6.f / static_cast<TElem>(input_units + output_units));
+        TElem xav_min = -xav_max;
+        uniform(xav_min, xav_max);
     }
 
     auto begin() { return _data.begin(); }

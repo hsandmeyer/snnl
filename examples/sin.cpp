@@ -17,13 +17,6 @@ struct SinModel : public TModule<float> {
         dense1 = addModule<TDenseModule>(1, 64);
         dense2 = addModule<TDenseModule>(64, 16);
         dense3 = addModule<TDenseModule>(16, 1);
-
-        dense1->W()->values().uniform(-1, 1);
-        dense1->B()->values().uniform(-1, 1);
-        dense2->W()->values().uniform(-1, 1);
-        dense2->B()->values().uniform(-1, 1);
-        dense3->W()->values().uniform(-1, 1);
-        dense3->B()->values().uniform(-1, 1);
     }
 
     virtual TNodeShPtr<float>
@@ -40,34 +33,27 @@ struct SinModel : public TModule<float> {
 
 int main()
 {
-
     size_t            batch_size = 4;
     TNodeShPtr<float> input      = TNode<float>::create({batch_size, 1});
-
-    TNodeShPtr<float> correct = TNode<float>::create({batch_size, 1});
-
-    TConnectorShPtr<float> mse =
-        TDenseConnector<float>::create<TMSEConnector>();
-
-    SinModel model;
+    SinModel          model;
 
     TSGDOptimizer<float> optimizer(1e-1);
 
-    for (size_t step = 0; step < 10000; step++) {
+    for (size_t step = 0; step < 100000; step++) {
         input->values().uniform(-M_PI, M_PI);
 
-        correct = Sin(input);
+        auto correct = Sin(input);
         correct->disconnect();
 
         TNodeShPtr<float> out  = model.call(input);
         TNodeShPtr<float> loss = MSE(correct, out);
 
-        loss->zeroGrad();
         loss->computeGrad();
 
         optimizer.optimizeStep(loss);
 
         if (step % 500 == 0) {
+            // std::cout << model.dense1->B()->values();
 
             std::cout << "Loss = " << loss->value(0) << std::endl;
             std::cout << "Diff =\n"
