@@ -59,6 +59,8 @@ public:
         return std::shared_ptr<TChildModule<TElem>>(
             new TChildModule<TElem>(::std::forward<TArgs>(args)...));
     }
+
+    virtual ~TModule() {}
 };
 
 } // namespace snnl

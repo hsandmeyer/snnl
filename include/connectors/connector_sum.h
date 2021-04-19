@@ -7,10 +7,7 @@ namespace snnl {
 template <class TElem>
 class TSumConnector : public TConnector<TElem> {
 public:
-    virtual ~TSumConnector()
-    {
-        std::cout << "Destroying Sum connector" << std::endl;
-    }
+    virtual ~TSumConnector() {}
 
     TIndex
     outputDims(const std::vector<TNodeShPtr<TElem>>& input_nodes) const override
@@ -25,8 +22,6 @@ public:
     void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
                         TNode<TElem>* output_node) override
     {
-        // std::cout << "FORWARD on Sum layer" << std::endl;
-
         output_node->value(0) = 0;
         output_node->value(0) += std::accumulate(
             input_nodes.front()->values().begin(),
@@ -36,7 +31,6 @@ public:
     void backwardHandler(const TNode<TElem>*             output_node,
                          std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
-        // std::cout << "BACKWARD on sum layer" << std::endl;
         TElem output_grad = output_node->grad(0);
         for (auto& val : input_nodes.front()->gradient()) {
             val += output_grad;

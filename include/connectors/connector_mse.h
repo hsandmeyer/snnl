@@ -6,10 +6,7 @@ namespace snnl {
 template <class TElem>
 class TMSEConnector : public TConnector<TElem> {
 public:
-    virtual ~TMSEConnector()
-    {
-        std::cout << "Destroying MSE connector" << std::endl;
-    }
+    virtual ~TMSEConnector() {}
 
     TIndex
     outputDims(const std::vector<TNodeShPtr<TElem>>& input_nodes) const override

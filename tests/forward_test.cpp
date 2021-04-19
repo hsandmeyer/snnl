@@ -19,7 +19,7 @@ TEST_P(OneDenseConnectorTest, input_shape)
 
     TNodeShPtr<float> input = TNode<float>::create(shape);
 
-    input->values().rangeAllDims(-1, 0, 2);
+    input->values().arangeAlongAxis(-1, 0, input->values().shape(-1) * 2);
 
     TDenseModuleShPtr<float> encode =
         TModule<float>::create<TDenseModule>(shape.back(), 32ul);

@@ -195,7 +195,8 @@ TEST_P(Tensor4DTest, size)
         i++;
     }
 
-    t.rangeAllDims(0, 1, 2);
+    // Steps of 2
+    t.arangeAlongAxis(0, 1, t.shape(0) * 2 + 1);
 
     for (size_t i = 0; i < t.shape(0); i++) {
         for (size_t j = 0; j < t.shape(1); j++) {
@@ -207,7 +208,8 @@ TEST_P(Tensor4DTest, size)
         }
     }
 
-    t.rangeAllDims(2, 5, -2);
+    // Steps of -2
+    t.arangeAlongAxis(2, 5, static_cast<int>(t.shape(2)) * -2 + 5);
 
     for (size_t i = 0; i < t.shape(0); i++) {
         for (size_t j = 0; j < t.shape(1); j++) {
@@ -251,7 +253,7 @@ INSTANTIATE_TEST_SUITE_P(Tensor4DTestAllTests, Tensor4DTest,
                                            std::array<size_t, 4>{10, 10, 10,
                                                                  10}));
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

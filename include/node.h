@@ -207,6 +207,8 @@ public:
         }
     }
 
+    TNodeShPtr<TElem> getPtr() { return this->shared_from_this(); }
+
 protected:
     TNode(const TNode&) = delete;
 
@@ -223,11 +225,8 @@ protected:
     {
     }
 
-    TNodeShPtr<TElem> getPtr() { return this->shared_from_this(); }
-
     void backward()
     {
-        // std::cout << "BACKWARD on node " << std::endl;
         _backward_calls++;
         if (_prev_connector) {
             if (_backward_calls == _connected_nodes.size()) {

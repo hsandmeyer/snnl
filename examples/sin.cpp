@@ -2,6 +2,7 @@
 #include "forward_declare.h"
 #include "modules/module_dense.h"
 #include "node.h"
+#include "optimizer.h"
 #include <fstream>
 
 using namespace snnl;
@@ -50,6 +51,8 @@ int main()
 
     SinModel model;
 
+    TSGDOptimizer<float> optimizer(1e-1);
+
     for (size_t step = 0; step < 10000; step++) {
         input->values().uniform(-M_PI, M_PI);
 
@@ -61,15 +64,8 @@ int main()
 
         loss->zeroGrad();
         loss->computeGrad();
-        // test_grad({input}, loss);
 
-        float eps = 1e-1;
-
-        loss->iterateWeights([&](TNode<float>& weight) {
-            for (size_t ind = 0; ind < weight.shapeFlattened(-1); ind++) {
-                weight.value(ind) = weight.value(ind) - eps * weight.grad(ind);
-            }
-        });
+        optimizer.optimizeStep(loss);
 
         if (step % 500 == 0) {
 
@@ -80,7 +76,7 @@ int main()
             std::ofstream fout("test.txt");
 
             input->setDims({100, 1});
-            input->values().rangeAllDims(0, -M_PI, 2 * M_PI / 100.f);
+            input->values().arangeAlongAxis(0, -M_PI, M_PI);
             out = model.call(input);
 
             correct = Sin(input);

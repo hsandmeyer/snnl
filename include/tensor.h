@@ -171,11 +171,14 @@ public:
         forEach(index, 0, func);
     }
 
-    void rangeAllDims(int axis, TElem start, TElem step)
+    void arangeAlongAxis(int axis, TElem start, TElem stop)
     {
         if (axis < 0) {
             axis += NDims();
         }
+
+        TElem step = (stop - start) / static_cast<TElem>(shape(axis));
+
         modifyForEach([&](const TIndex& index) -> TElem {
             return start + index[axis] * step;
         });

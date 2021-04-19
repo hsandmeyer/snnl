@@ -44,7 +44,6 @@ class TDenseConnector : public TConnector<TElem> {
                         TNode<TElem>* output_node) override
     {
 
-        // std::cout << "FORWARD on dense layer" << std::endl;
         dimChecks(input_nodes);
 
         auto& output = output_node->values();
@@ -91,7 +90,6 @@ class TDenseConnector : public TConnector<TElem> {
     void backwardHandler(const TNode<TElem>*             output,
                          std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
-        // std::cout << "BACKWARD on dense layer" << std::endl;
         dimChecks(input_nodes);
 
         TNode<TElem>& W = *input_nodes.at(0);
@@ -124,10 +122,7 @@ class TDenseConnector : public TConnector<TElem> {
     }
 
 public:
-    virtual ~TDenseConnector()
-    {
-        std::cout << "Destroying Dense Connector" << std::endl;
-    }
+    virtual ~TDenseConnector() {}
 };
 
 template <class TElem>

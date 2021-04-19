@@ -7,10 +7,7 @@ namespace snnl {
 template <class TElem>
 class TSinConnector : public TConnector<TElem> {
 public:
-    virtual ~TSinConnector()
-    {
-        std::cout << "Destroying Sin connector" << std::endl;
-    }
+    virtual ~TSinConnector() {}
 
     TIndex
     outputDims(const std::vector<TNodeShPtr<TElem>>& input_nodes) const override
@@ -34,7 +31,6 @@ public:
     void backwardHandler(const TNode<TElem>*             output_node,
                          std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
-        // std::cout << "BACKWARD on sigmoid layer" << std::endl;
         TNodeShPtr<TElem> input_node = input_nodes.front();
 
         for (size_t ind = 0; ind < output_node->shapeFlattened(-1); ind++) {
@@ -55,10 +51,7 @@ TNodeShPtr<TElem> Sin(const TNodeShPtr<TElem>& node)
 template <class TElem>
 class TCosConnector : public TConnector<TElem> {
 public:
-    virtual ~TCosConnector()
-    {
-        std::cout << "Destroying Cos connector" << std::endl;
-    }
+    virtual ~TCosConnector() {}
 
     TIndex
     outputDims(const std::vector<TNodeShPtr<TElem>>& input_nodes) const override
@@ -82,7 +75,6 @@ public:
     void backwardHandler(const TNode<TElem>*             output_node,
                          std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
-        // std::cout << "BACKWARD on sigmoid layer" << std::endl;
         TNodeShPtr<TElem> input_node = input_nodes.front();
 
         for (size_t ind = 0; ind < output_node->shapeFlattened(-1); ind++) {
