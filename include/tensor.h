@@ -1,6 +1,7 @@
 #pragma once
 #include "index.h"
 #include <array>
+#include <cstddef>
 #include <functional>
 #include <initializer_list>
 #include <iostream>
@@ -332,5 +333,89 @@ public:
     auto begin() { return _data.begin(); }
 
     auto end() { return _data.end(); }
+
+    template <typename TElemOther>
+    TTensor& operator*=(const TTensor<TElemOther>& other)
+    {
+        if (other._shape != _shape) {
+            throw std::invalid_argument("Operatr *=: Size missmatch");
+        }
+        for (size_t ind = 0; ind < shapeFlattened(-1); ind++) {
+            (*this)(ind) *= other(ind);
+        }
+        return *this;
+    }
+
+    template <typename TElemOther>
+    TTensor& operator-=(const TTensor<TElemOther>& other)
+    {
+        if (other._shape != _shape) {
+            throw std::invalid_argument("Operatr *=: Size missmatch");
+        }
+        for (size_t ind = 0; ind < shapeFlattened(-1); ind++) {
+            (*this)(ind) -= other(ind);
+        }
+        return *this;
+    }
+
+    template <typename TElemOther>
+    TTensor& operator/=(const TTensor<TElemOther>& other)
+    {
+        if (other._shape != _shape) {
+            throw std::invalid_argument("Operatr *=: Size missmatch");
+        }
+        for (size_t ind = 0; ind < shapeFlattened(-1); ind++) {
+            (*this)(ind) /= other(ind);
+        }
+        return *this;
+    }
+
+    template <typename TElemOther>
+    TTensor& operator+=(const TTensor<TElemOther>& other)
+    {
+        if (other._shape != _shape) {
+            throw std::invalid_argument("Operatr *=: Size missmatch");
+        }
+        for (size_t ind = 0; ind < shapeFlattened(-1); ind++) {
+            (*this)(ind) += other(ind);
+        }
+        return *this;
+    }
+
+    template <typename TElemA, typename TElemB>
+    friend TTensor<TElemA> operator+(const TTensor<TElemA>& a,
+                                     const TTensor<TElemB>& b)
+    {
+        TTensor<TElemA> out(a);
+        out += b;
+        return out;
+    }
+
+    template <typename TElemA, typename TElemB>
+    friend TTensor<TElemA> operator-(const TTensor<TElemA>& a,
+                                     const TTensor<TElemB>& b)
+    {
+        TTensor<TElemA> out(a);
+        out -= b;
+        return out;
+    }
+
+    template <typename TElemA, typename TElemB>
+    friend TTensor<TElemA> operator*(const TTensor<TElemA>& a,
+                                     const TTensor<TElemB>& b)
+    {
+        TTensor<TElemA> out(a);
+        out *= b;
+        return out;
+    }
+
+    template <typename TElemA, typename TElemB>
+    friend TTensor<TElemA> operator/(const TTensor<TElemA>& a,
+                                     const TTensor<TElemB>& b)
+    {
+        TTensor<TElemA> out(a);
+        out /= b;
+        return out;
+    }
 };
 } // namespace snnl

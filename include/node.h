@@ -17,15 +17,15 @@ class TNode : public std::enable_shared_from_this<TNode<TElem>> {
     TTensor<TElem> _values;
     TTensor<TElem> _gradient;
 
-    size_t _backward_calls = 0;
-
-    // Connected nodes from the last forward call
-    std::unordered_set<TNode<TElem>*> _connected_nodes = {};
-
-    bool _is_const  = false;
     bool _is_weight = false;
 
     TConnectorShPtr<TElem> _prev_connector = nullptr;
+
+    // Extra variabels for tracking the backward call.
+    // Connected nodes from the last forward call
+    std::unordered_set<TNode<TElem>*> _connected_nodes = {};
+    bool                              _needs_grad      = false;
+    size_t                            _backward_calls  = 0;
 
     TNode() = default;
 
@@ -61,7 +61,7 @@ public:
     }
 
     static ::std::shared_ptr<TNode>
-    create(const std::initializer_list<TElem> shape)
+    create(const std::initializer_list<size_t> shape)
     {
         return ::std::shared_ptr<TNode>(new TNode(shape));
     }
@@ -193,15 +193,19 @@ public:
 
     bool isWeight() const { return _is_weight; }
 
-    bool isConstant() const { return _is_const; }
-
     bool isLeave() const { return _prev_connector == nullptr; }
 
     void setWeight(bool val) { _is_weight = val; }
 
-    void setConstant(bool val) { _is_const = val; }
-
     size_t NDims() { return _values.NDims(); }
+
+    void disconnect()
+    {
+        if (_prev_connector) {
+            _prev_connector->disconnect(this);
+            _prev_connector = nullptr;
+        }
+    }
 
 protected:
     TNode(const TNode&) = delete;
@@ -209,8 +213,7 @@ protected:
     const TNode& operator=(const TNode&) = delete;
 
     template <typename TArray>
-    TNode(const TArray& shape, bool is_weight = false, bool is_const = false)
-        : _is_const(is_const), _is_weight(is_weight)
+    TNode(const TArray& shape, bool is_weight = false) : _is_weight(is_weight)
     {
         setDims(shape);
     }
@@ -239,25 +242,27 @@ protected:
         }
     }
 
-    void countConnectedNodesBackwards(TNode<TElem>* next_node = nullptr)
+    bool countConnectedNodesBackwards(TNode<TElem>* next_node = nullptr)
     {
         if (next_node) {
             if (_connected_nodes.find(next_node) != _connected_nodes.end()) {
                 // Already came along this edge. Stop here
-                return;
+                return _needs_grad;
+            }
+            if (_connected_nodes.empty()) {
+                _gradient.setAllValues(static_cast<TElem>(0));
             }
             _connected_nodes.emplace(next_node);
         }
-        if (_prev_connector) {
-            _prev_connector->countConnectedNodesBackwards(this);
-        }
-    }
 
-    void disconnect()
-    {
+        bool needs_grad = _is_weight;
+
         if (_prev_connector) {
-            _prev_connector->disconnect(this);
+            needs_grad |= _prev_connector->countConnectedNodesBackwards(this);
         }
+
+        _needs_grad = needs_grad;
+        return needs_grad;
     }
 
     void connectPrevConnector(TConnectorShPtr<TElem>& prev)

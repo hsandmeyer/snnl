@@ -54,9 +54,6 @@ void test_grad(TModule<double>& model, std::vector<TNodeShPtr<double>> inputs)
     auto loss = model.call(inputs);
     loss->iterateWeights(
         [&](TNode<double>& weight) { test_node_grad(weight, model, inputs); });
-    for (auto& input : inputs) {
-        test_node_grad(*input, model, inputs);
-    }
 }
 
 class LinearConnectorTest
@@ -94,12 +91,9 @@ TEST_P(LinearConnectorTest, input_shape)
 
     TNodeShPtr<double> out = model.call(input);
 
-    out->zeroGrad();
-    out->computeGrad();
-
     // Multiple times to ensure that zeroGrad works correctly
-    // out->zeroGrad();
-    // out->computeGrad();
+    out->computeGrad();
+    out->computeGrad();
 
     test_grad(model, {input});
 }
@@ -154,11 +148,7 @@ TEST_P(SkipConnectorTest, input_shape)
 
     auto out = model.call(input);
 
-    out->zeroGrad();
     out->computeGrad();
-
-    // Multiple times to ensure that zeroGrad works correctly
-    out->zeroGrad();
     out->computeGrad();
 
     test_grad(model, {input});
@@ -181,7 +171,7 @@ TEST(BackwardTests, ComplexGraph)
         virtual TNodeShPtr<double>
         callHandler(std::vector<TNodeShPtr<double>> inputs) override
         {
-            auto tmp_1_0 = dense->call(inputs[0]);
+            auto tmp_1_0 = dense->call(Sin(inputs[0]));
             tmp_1_0      = Sigmoid(tmp_1_0);
 
             // Reuse same callor
@@ -189,7 +179,7 @@ TEST(BackwardTests, ComplexGraph)
             tmp_1_1      = Sigmoid(tmp_1_1);
 
             // Reuse same callor on other input
-            auto tmp_2_0 = dense->call(inputs[1]);
+            auto tmp_2_0 = dense->call(Sin(inputs[1]));
             tmp_2_0      = Sigmoid(tmp_2_0);
 
             // Skip callion by addition
@@ -219,13 +209,19 @@ TEST(BackwardTests, ComplexGraph)
 
     auto res = model.call(input_1, input_2);
 
-    res->zeroGrad();
     res->computeGrad();
-
-    res->zeroGrad();
     res->computeGrad();
 
     test_grad(model, {input_1, input_2});
+
+    // Input is conectect via Sin. Sin does not involve any weights, nor are
+    // there any weights above input_1 and input_2 -> Gradient should not have
+    // be computed here
+    for (auto& input : {input_1, input_2}) {
+        for (auto& val : input->gradient()) {
+            EXPECT_EQ(val, 0.f);
+        }
+    }
 }
 
 int main(int argc, char** argv)

@@ -96,9 +96,20 @@ protected:
     {
         SNodeConnection& nconn = _node_connections[calling_node];
 
-        backwardHandler(nconn.output_node, nconn.input_nodes);
+        bool need_gradient_above = false;
+        for (auto& node : nconn.input_nodes) {
+            need_gradient_above |= node->_needs_grad;
+        }
+
+        if (need_gradient_above) {
+            // If there is no weight above, we do not neeed to compute gradients
+            backwardHandler(nconn.output_node, nconn.input_nodes);
+        }
 
         for (auto& node : nconn.input_nodes) {
+            // Allways call backward, even if no weights are above.
+            // This is to reset _backward_calls and _connected_nodes on each
+            // node
             node->backward();
         }
     }
@@ -144,13 +155,15 @@ protected:
         }
     }
 
-    void countConnectedNodesBackwards(TNode<TElem>* calling_node)
+    bool countConnectedNodesBackwards(TNode<TElem>* calling_node)
     {
-        auto& nconn = _node_connections.at(calling_node);
+        auto& nconn           = _node_connections.at(calling_node);
+        bool  need_grad_above = false;
 
         for (auto& prev : nconn.input_nodes) {
-            prev->countConnectedNodesBackwards(calling_node);
+            need_grad_above |= prev->countConnectedNodesBackwards(calling_node);
         }
+        return need_grad_above;
     }
 };
 

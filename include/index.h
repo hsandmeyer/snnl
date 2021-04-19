@@ -100,5 +100,5 @@ public:
 
     size_t NDims() const { return _shape.size(); }
 
-    bool operator!=(const TIndex& b) { return _shape != b._shape; }
+    bool operator!=(const TIndex& b) const { return _shape != b._shape; }
 };

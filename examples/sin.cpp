@@ -40,22 +40,21 @@ struct SinModel : public TModule<float> {
 int main()
 {
 
-    TNodeShPtr<float> input = TNode<float>::create({4, 1});
+    size_t            batch_size = 4;
+    TNodeShPtr<float> input      = TNode<float>::create({batch_size, 1});
 
-    TNodeShPtr<float> correct = TNode<float>::create({4, 1});
-    correct->setConstant(true);
+    TNodeShPtr<float> correct = TNode<float>::create({batch_size, 1});
 
     TConnectorShPtr<float> mse =
         TDenseConnector<float>::create<TMSEConnector>();
 
     SinModel model;
 
-    for (size_t step = 0; step < 100000; step++) {
+    for (size_t step = 0; step < 10000; step++) {
         input->values().uniform(-M_PI, M_PI);
 
-        for (size_t ind = 0; ind < correct->shapeFlattened(-1); ind++) {
-            correct->value(ind) = std::sin(input->value(ind));
-        }
+        correct = Sin(input);
+        correct->disconnect();
 
         TNodeShPtr<float> out  = model.call(input);
         TNodeShPtr<float> loss = MSE(correct, out);
@@ -74,26 +73,27 @@ int main()
 
         if (step % 500 == 0) {
 
-            std::cout << loss->value(0) << " ";
-            for (size_t i = 0; i < correct->shapeFlattened(-1); i++) {
-                std::cout << out->value(i) - correct->value(i) << " ";
-            }
+            std::cout << "Loss = " << loss->value(0) << std::endl;
+            std::cout << "Diff =\n"
+                      << out->values() - correct->values() << " " << std::endl;
 
-            std::cout << std::endl;
             std::ofstream fout("test.txt");
 
-            input->setDims({1, 1});
-            correct->setDims({1, 1});
-            for (int i = 0; i < 100; i++) {
-                float x = -M_PI + i * 2 * M_PI / 100.;
-                fout << x << " " << std::sin(x) << " ";
-                input->value(0) = x;
+            input->setDims({100, 1});
+            input->values().rangeAllDims(0, -M_PI, 2 * M_PI / 100.f);
+            out = model.call(input);
 
-                out = model.call(input);
-                fout << out->value(0) << std::endl;
+            correct = Sin(input);
+            correct->disconnect();
+
+            for (size_t ind = 0; ind < input->values().shapeFlattened(-1);
+                 ++ind) {
+                fout << input->value(ind, 0) << " " << correct->value(ind, 0)
+                     << " " << out->value(ind, 0) << std::endl;
             }
-            input->setDims({4, 1});
-            correct->setDims({4, 1});
+
+            input->setDims({batch_size, 1});
+            correct->setDims({batch_size, 1});
         }
     }
 }

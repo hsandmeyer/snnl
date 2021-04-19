@@ -3,4 +3,5 @@
 #include "connectors/connector_dense.h"
 #include "connectors/connector_mse.h"
 #include "connectors/connector_sigmoid.h"
+#include "connectors/connector_sin.h"
 #include "connectors/connector_sum.h"
