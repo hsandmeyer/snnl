@@ -5,6 +5,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iostream>
+#include <memory>
 #include <ostream>
 #include <random>
 #include <stdexcept>
@@ -18,8 +19,8 @@ class TTensor {
     TIndex _shape;
     TIndex _strides;
 
-    std::mt19937_64    _rng;
-    std::vector<TElem> _data = {};
+    std::mt19937_64                     _rng;
+    std::shared_ptr<std::vector<TElem>> _data = {};
 
     template <typename TArray>
     void fillDims(const TArray& shape)
@@ -47,7 +48,7 @@ class TTensor {
             _strides[i] = _shape[i + 1] * _strides[i + 1];
         }
 
-        _data.resize(NElems());
+        _data->resize(NElems());
     }
 
     template <typename... Ts>
@@ -141,18 +142,41 @@ public:
     typedef typename std::vector<TElem>::const_iterator const_iterator;
 
     // TODO: global seed
-    TTensor() : _NDims(0), _rng(time(NULL)) {}
+    TTensor()
+        : _NDims(0), _rng(time(NULL)),
+          _data(std::make_shared<std::vector<TElem>>())
+    {
+    }
 
     TTensor(const std::initializer_list<size_t> shape)
-        : _NDims(shape.size()), _rng(time(NULL))
+        : _NDims(shape.size()), _rng(time(NULL)),
+          _data(std::make_shared<std::vector<TElem>>())
     {
         fillDims(shape);
     }
 
     template <typename TArray>
-    TTensor(const TArray& shape) : _NDims(shape.size())
+    TTensor(const TArray& shape)
+        : _NDims(shape.size()), _rng(time(NULL)),
+          _data(std::make_shared<std::vector<TElem>>())
     {
         fillDims(shape);
+    }
+
+    TTensor(const TTensor& other)
+        : _NDims(other._NDims), _shape(other._shape), _strides(other._strides),
+          _rng(other._rng),
+          _data(std::make_shared<std::vector<TElem>>(*other._data))
+    {
+    }
+
+    TTensor& operator=(const TTensor& other)
+    {
+        _NDims   = other._NDims;
+        _shape   = other._shape;
+        _strides = other._strides;
+        _rng     = other._rng;
+        *_data   = *other._data;
     }
 
     void forEach(std::function<void(const TIndex&)> func)
@@ -209,7 +233,6 @@ public:
     // into i
     size_t shapeFlattened(int i) const
     {
-
         if (i < 0) {
             i += NDims();
         }
@@ -225,9 +248,9 @@ public:
     TElem& operator()(T... indices)
     {
 #ifdef DEBUG
-        return _data.at(dataOffset(indices...));
+        return _data->at(dataOffset(indices...));
 #else
-        return _data[dataOffset(indices...)];
+        return (*_data)[dataOffset(indices...)];
 #endif
     }
 
@@ -235,9 +258,9 @@ public:
     const TElem& operator()(T... indices) const
     {
 #ifdef DEBUG
-        return _data.at(dataOffset(indices...));
+        return _data->at(dataOffset(indices...));
 #else
-        return _data[dataOffset(indices...)];
+        return (*_data)[dataOffset(indices...)];
 #endif
     }
 
@@ -258,7 +281,7 @@ public:
 
     TElem& operator()(const TIndex& index_vec)
     {
-        return _data[index(index_vec)];
+        return (*_data)[index(index_vec)];
     }
 
     size_t shape(int i) const
@@ -299,23 +322,23 @@ public:
 
     void setFlattenedValues(std::initializer_list<TElem> flattened_values)
     {
-        if (flattened_values.size() != _data.size()) {
+        if (flattened_values.size() != _data->size()) {
             throw std::invalid_argument(
                 "Flattened array does not match data size");
         }
         std::copy(flattened_values.begin(), flattened_values.end(),
-                  _data.begin());
+                  _data->begin());
     }
 
     template <typename TArray>
     void setFlattenedValues(const TArray& flattened_values)
     {
-        if (flattened_values.size() != _data.size()) {
+        if (flattened_values.size() != _data->size()) {
             throw std::invalid_argument(
                 "Flattened array does not match data size");
         }
         std::copy(flattened_values.begin(), flattened_values.end(),
-                  _data.begin());
+                  _data->begin());
     }
 
     void setAllValues(TElem value) { std::fill(begin(), end(), value); }
@@ -344,9 +367,9 @@ public:
         uniform(xav_min, xav_max);
     }
 
-    auto begin() { return _data.begin(); }
+    auto begin() { return _data->begin(); }
 
-    auto end() { return _data.end(); }
+    auto end() { return _data->end(); }
 
     template <typename TElemOther>
     TTensor& operator*=(const TTensor<TElemOther>& other)
