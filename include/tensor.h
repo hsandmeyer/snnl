@@ -50,18 +50,14 @@ class TTensor {
         _data.resize(NElems());
     }
 
-    template <size_t N, typename... Ts>
+    template <typename... Ts>
     size_t dataOffset(size_t i, Ts... im) const
     {
         return i * _strides[_strides.NDims() - sizeof...(Ts) - 1] +
-               dataOffset<N + 1>(im...);
+               dataOffset(im...);
     }
 
-    template <size_t N>
-    size_t dataOffset(size_t j) const
-    {
-        return j;
-    }
+    size_t dataOffset(size_t j) const { return j; }
 
     void stream(TIndex& ind, int dim, std::ostream& o) const
     {
@@ -229,9 +225,9 @@ public:
     TElem& operator()(T... indices)
     {
 #ifdef DEBUG
-        return _data.at(dataOffset<0>(indices...));
+        return _data.at(dataOffset(indices...));
 #else
-        return _data[dataOffset<0>(indices...)];
+        return _data[dataOffset(indices...)];
 #endif
     }
 
@@ -239,9 +235,9 @@ public:
     const TElem& operator()(T... indices) const
     {
 #ifdef DEBUG
-        return _data.at(dataOffset<0>(indices...));
+        return _data.at(dataOffset(indices...));
 #else
-        return _data[dataOffset<0>(indices...)];
+        return _data[dataOffset(indices...)];
 #endif
     }
 
@@ -254,7 +250,7 @@ public:
     size_t index(const TIndex& index_vec) const
     {
         size_t index = 0;
-        for (size_t i = _strides.NDims(); i-- > 0;) {
+        for (size_t i = 0; i < static_cast<size_t>(NDims()); ++i) {
             index += index_vec[i] * _strides[i];
         }
         return index;
