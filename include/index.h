@@ -1,5 +1,6 @@
 #pragma once
 #include <initializer_list>
+#include <ostream>
 #include <vector>
 
 class TIndex {
@@ -74,6 +75,10 @@ public:
 
     TIndex(TIndex&&) = default;
 
+    TIndex& operator=(TIndex&&) = default;
+
+    TIndex& operator=(const TIndex&) = default;
+
     auto begin() { return _shape.begin(); }
 
     auto end() { return _shape.end(); }
@@ -92,7 +97,9 @@ public:
 
     auto size() const { return _shape.size(); }
 
-    void addDim(size_t i) { _shape.push_back(i); }
+    void appendAxis(size_t i) { _shape.push_back(i); }
+
+    void prependAxis(size_t i) { _shape.insert(_shape.begin(), i); }
 
     void removeDim() { _shape.pop_back(); }
 
@@ -101,4 +108,19 @@ public:
     size_t NDims() const { return _shape.size(); }
 
     bool operator!=(const TIndex& b) const { return _shape != b._shape; }
+
+    bool operator==(const TIndex& b) const { return _shape == b._shape; }
+
+    friend std::ostream& operator<<(std::ostream& o, TIndex ind)
+    {
+        o << "{";
+        for (size_t i = 0; i < ind._shape.size(); i++) {
+            o << ind[i];
+            if (i < ind.size() - 1) {
+                o << ", ";
+            }
+        }
+        o << "}";
+        return o;
+    }
 };

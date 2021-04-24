@@ -6,6 +6,7 @@
 #include <initializer_list>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #include <ostream>
 #include <random>
 #include <stdexcept>
@@ -15,7 +16,7 @@ namespace snnl {
 template <class TElem>
 class TTensor {
 
-    int    _NDims;
+    size_t _NDims;
     TIndex _shape;
     TIndex _strides;
 
@@ -25,30 +26,56 @@ class TTensor {
     template <typename TArray>
     void fillDims(const TArray& shape)
     {
-        // std::cout << "Setting tensor dimension: (";
-        _shape.setNDims(_NDims);
+        checkResizeAllowed(shape);
+
+        _NDims = shape.size();
+        _shape.setNDims(shape.size());
 
         int i = 0;
         for (auto dim_len : shape) {
-            //   std::cout << dim_len << " ";
             _shape[i] = dim_len;
             i++;
         }
-        // std::cout << ")" << std::endl;
 
         fillStrides();
     }
 
-    void fillStrides()
+    template <typename TArray>
+    size_t NElemsFromShape(TArray& shape)
+    {
+        if (shape.size() == 0) {
+            // Scalar
+            return 1;
+        }
+        return std::accumulate(shape.begin(), shape.end(), 1,
+                               std::multiplies<size_t>());
+    }
+
+    template <typename TArray>
+    void checkResizeAllowed(TArray& shape)
+    {
+        if (_data->size() != NElemsFromShape(shape) && _data.use_count() > 1) {
+            throw std::domain_error("Trying to resize a tensor which "
+                                    "is used somewhere else");
+        }
+    }
+
+    void fillStrides(bool realloc = true)
     {
         _strides.setNDims(_NDims);
-        _strides[_NDims - 1] = 1;
+        if (_NDims != 0) {
+            _strides[_NDims - 1] = 1;
 
-        for (int i = _NDims - 2; i >= 0; --i) {
-            _strides[i] = _shape[i + 1] * _strides[i + 1];
+            for (int i = _NDims - 2; i >= 0; --i) {
+                _strides[i] = _shape[i + 1] * _strides[i + 1];
+            }
         }
 
-        _data->resize(NElems());
+        if (realloc) {
+            if (_data->size() != NElems()) {
+                _data->resize(NElems());
+            }
+        }
     }
 
     template <typename... Ts>
@@ -60,8 +87,15 @@ class TTensor {
 
     size_t dataOffset(size_t j) const { return j; }
 
+    // For scalar
+    size_t dataOffset() const { return 0; }
+
     void stream(TIndex& ind, int dim, std::ostream& o) const
     {
+        if (_NDims == 0) {
+            o << (*_data)[0];
+            return;
+        }
 
         if (dim + 1 < NDims()) {
             o << "{";
@@ -110,6 +144,10 @@ class TTensor {
             }
         }
         else {
+            if (_NDims == 0) {
+                (*this)(index) = caller(index);
+                return;
+            }
             // Last axis
             for (size_t i = 0; i < _shape[dim]; ++i) {
                 index[dim]     = i;
@@ -129,6 +167,10 @@ class TTensor {
             }
         }
         else {
+            if (_NDims == 0) {
+                caller(index);
+                return;
+            }
             // Last axis
             for (size_t i = 0; i < _shape[dim]; ++i) {
                 index[dim] = i;
@@ -146,6 +188,7 @@ public:
         : _NDims(0), _rng(time(NULL)),
           _data(std::make_shared<std::vector<TElem>>())
     {
+        fillDims(std::array<size_t, 0>{});
     }
 
     TTensor(const std::initializer_list<size_t> shape)
@@ -170,13 +213,18 @@ public:
     {
     }
 
+    TTensor(TTensor&& shape) = default;
+
+    TTensor& operator=(TTensor&& shape) = default;
+
     TTensor& operator=(const TTensor& other)
     {
         _NDims   = other._NDims;
         _shape   = other._shape;
         _strides = other._strides;
         _rng     = other._rng;
-        *_data   = *other._data;
+        _data    = std::make_shared<std::vector<TElem>>(*other._data);
+        return *this;
     }
 
     void forEach(std::function<void(const TIndex&)> func)
@@ -197,7 +245,15 @@ public:
             axis += NDims();
         }
 
-        TElem step = (stop - start) / static_cast<TElem>(shape(axis));
+        TElem step = 0;
+
+        if (_NDims != 0) {
+            step = (stop - start) / static_cast<TElem>(shape(axis));
+        }
+        else {
+            (*_data)[0] = start;
+            return;
+        }
 
         modifyForEach([&](const TIndex& index) -> TElem {
             return start + index[axis] * step;
@@ -207,30 +263,78 @@ public:
     template <typename TArray>
     void setDims(const TArray& arr)
     {
-        _NDims = arr.size();
         fillDims(arr);
     }
-    void setDims(const std::initializer_list<size_t> shape)
-    {
-        _NDims = shape.size();
-        fillDims(shape);
-    }
 
-    void addDim(const size_t dim_len)
+    void setDims(const std::initializer_list<size_t> shape) { fillDims(shape); }
+
+    void appendAxis(const size_t dim_len)
     {
         _NDims++;
-        _shape.addDim(dim_len);
-        _strides.addDim(0);
+        _shape.appendAxis(dim_len);
+        _strides.appendAxis(0);
 
+        checkResizeAllowed(_shape);
         fillStrides();
+    }
+
+    void appendAxis()
+    {
+        _NDims++;
+        _shape.appendAxis(1);
+        _strides.appendAxis(0);
+        fillStrides(false);
+    }
+
+    void prependAxis()
+    {
+        _NDims++;
+        _shape.prependAxis(1);
+        _strides.prependAxis(0);
+        fillStrides(false);
+    }
+
+    TTensor<TElem> viewAs(std::initializer_list<size_t> shape)
+    {
+        return viewAs(std::vector<size_t>(shape.begin(), shape.end()));
+    }
+
+    template <typename TArray>
+    TTensor<TElem> viewAs(const TArray& arr)
+    {
+        TTensor out;
+        out._data = _data;
+
+        out.setDims(arr);
+
+        auto itbegin = _strides.begin();
+
+        for (auto stride : out._strides) {
+            if (stride == 1 || stride == out.NElems()) {
+                continue;
+            }
+
+            itbegin = std::find(itbegin, _strides.end(), stride);
+            if (itbegin == _strides.end()) {
+                throw std::domain_error(
+                    "View of tensor does not evenly fit into source tensor");
+            }
+        }
+        return out;
     }
 
     int NDims() const { return _NDims; }
 
-    size_t NElems() const { return _strides[0] * _shape[0]; }
+    bool isScalar() { return _NDims == 0; }
 
-    // Length of axis i, if all following axis ( > i) are flattened
-    // into i
+    size_t NElems() const
+    {
+        if (_NDims == 0) {
+            return 1;
+        }
+        return _strides[0] * _shape[0];
+    }
+
     size_t shapeFlattened(int i) const
     {
         if (i < 0) {
@@ -238,16 +342,32 @@ public:
         }
 
         if (i >= NDims() || i < 0) {
-            return 1;
+            throw std::out_of_range("shapeFlattened Axis " + std::to_string(i) +
+                                    " is out of range");
         }
 
         return NElems() / stride(i);
     }
 
     template <typename... T>
+    void numIndicesCheck(T...) const
+    {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wtype-limits"
+        // For empty parameter stacks, this is always false (as intended). We
+        // have to disable the warning here
+        if (sizeof...(T) > _NDims) {
+            throw std::out_of_range(
+                "Number of inidizes exceeds number of dimension");
+        }
+#pragma GCC diagnostic pop
+    }
+
+    template <typename... T>
     TElem& operator()(T... indices)
     {
 #ifdef DEBUG
+        numIndicesCheck(indices...);
         return _data->at(dataOffset(indices...));
 #else
         return (*_data)[dataOffset(indices...)];
@@ -258,6 +378,7 @@ public:
     const TElem& operator()(T... indices) const
     {
 #ifdef DEBUG
+        numIndicesCheck(indices...);
         return _data->at(dataOffset(indices...));
 #else
         return (*_data)[dataOffset(indices...)];
@@ -270,18 +391,28 @@ public:
             (*const_cast<TTensor<TElem>*>(this))(index_vec));
     }
 
+    TElem& operator()(const TIndex& index_vec)
+    {
+#ifdef DEBUG
+        return (*_data)[index(index_vec)];
+#else
+        return _data->at(index(index_vec));
+#endif
+    }
+
     size_t index(const TIndex& index_vec) const
     {
+#ifdef DEBUG
+        if (index_vec.size() > _NDims) {
+            throw std::out_of_range(
+                "Number of inidizes exceeds number of dimension");
+        }
+#endif
         size_t index = 0;
         for (size_t i = 0; i < static_cast<size_t>(NDims()); ++i) {
             index += index_vec[i] * _strides[i];
         }
         return index;
-    }
-
-    TElem& operator()(const TIndex& index_vec)
-    {
-        return (*_data)[index(index_vec)];
     }
 
     size_t shape(int i) const
@@ -319,6 +450,52 @@ public:
     TIndex& shape() { return _shape; }
 
     const TIndex& shape() const { return _shape; }
+
+    TTensor<TElem> shrinkToNDimsFromRight(const size_t NDims)
+    {
+        TIndex newShape(NDims);
+        long   shape_ind = 0;
+
+        for (shape_ind = 1;
+             shape_ind <= static_cast<long>(std::min(_NDims, NDims - 1));
+             shape_ind++) {
+            newShape[-shape_ind] = shape(-shape_ind);
+        }
+        if (NDims <= _NDims) {
+            newShape[0] = shapeFlattened(-NDims);
+        }
+        else {
+            for (; shape_ind <= static_cast<long>(NDims); shape_ind++) {
+                newShape[-shape_ind] = 1;
+            }
+        }
+        return viewAs(newShape);
+    }
+
+    TTensor<TElem> shrinkToNDimsFromLeft(const size_t NDims)
+    {
+        TIndex newShape(NDims);
+        size_t shape_ind = 0;
+
+        for (shape_ind = 0; shape_ind < std::min(_NDims, NDims - 1);
+             shape_ind++) {
+            newShape[shape_ind] = shape(shape_ind);
+        }
+        if (NDims <= _NDims) {
+            if (static_cast<long>(NDims - 2) < 0) {
+                newShape[-1] = NElems();
+            }
+            else {
+                newShape[-1] = _strides[NDims - 2];
+            }
+        }
+        else {
+            for (; shape_ind < NDims; shape_ind++) {
+                newShape[shape_ind] = 1;
+            }
+        }
+        return viewAs(newShape);
+    }
 
     void setFlattenedValues(std::initializer_list<TElem> flattened_values)
     {
@@ -371,14 +548,19 @@ public:
 
     auto end() { return _data->end(); }
 
+    auto begin() const { return _data->begin(); }
+
+    auto end() const { return _data->end(); }
+
     template <typename TElemOther>
     TTensor& operator*=(const TTensor<TElemOther>& other)
     {
         if (other._shape != _shape) {
             throw std::invalid_argument("Operatr *=: Size missmatch");
         }
-        for (size_t ind = 0; ind < shapeFlattened(-1); ind++) {
-            (*this)(ind) *= other(ind);
+        auto otherInd = other.begin();
+        for (auto& val : *this) {
+            val *= *otherInd++;
         }
         return *this;
     }
@@ -389,8 +571,9 @@ public:
         if (other._shape != _shape) {
             throw std::invalid_argument("Operatr *=: Size missmatch");
         }
-        for (size_t ind = 0; ind < shapeFlattened(-1); ind++) {
-            (*this)(ind) -= other(ind);
+        auto otherInd = other.begin();
+        for (auto& val : *this) {
+            val -= *otherInd++;
         }
         return *this;
     }
@@ -401,8 +584,9 @@ public:
         if (other._shape != _shape) {
             throw std::invalid_argument("Operatr *=: Size missmatch");
         }
-        for (size_t ind = 0; ind < shapeFlattened(-1); ind++) {
-            (*this)(ind) /= other(ind);
+        auto otherInd = other.begin();
+        for (auto& val : *this) {
+            val /= *otherInd++;
         }
         return *this;
     }
@@ -413,44 +597,45 @@ public:
         if (other._shape != _shape) {
             throw std::invalid_argument("Operatr *=: Size missmatch");
         }
-        for (size_t ind = 0; ind < shapeFlattened(-1); ind++) {
-            (*this)(ind) += other(ind);
+        auto otherInd = other.begin();
+        for (auto& val : *this) {
+            val += *otherInd++;
         }
         return *this;
     }
 
-    template <typename TElemA, typename TElemB>
-    friend TTensor<TElemA> operator+(const TTensor<TElemA>& a,
-                                     const TTensor<TElemB>& b)
+    template <typename TElemB>
+    friend TTensor<TElem> operator+(const TTensor<TElem>&  a,
+                                    const TTensor<TElemB>& b)
     {
-        TTensor<TElemA> out(a);
+        TTensor<TElem> out(a);
         out += b;
         return out;
     }
 
-    template <typename TElemA, typename TElemB>
-    friend TTensor<TElemA> operator-(const TTensor<TElemA>& a,
-                                     const TTensor<TElemB>& b)
+    template <typename TElemB>
+    friend TTensor<TElem> operator-(const TTensor<TElem>&  a,
+                                    const TTensor<TElemB>& b)
     {
-        TTensor<TElemA> out(a);
+        TTensor<TElem> out(a);
         out -= b;
         return out;
     }
 
-    template <typename TElemA, typename TElemB>
-    friend TTensor<TElemA> operator*(const TTensor<TElemA>& a,
-                                     const TTensor<TElemB>& b)
+    template <typename TElemB>
+    friend TTensor<TElem> operator*(const TTensor<TElem>&  a,
+                                    const TTensor<TElemB>& b)
     {
-        TTensor<TElemA> out(a);
+        TTensor<TElem> out(a);
         out *= b;
         return out;
     }
 
-    template <typename TElemA, typename TElemB>
-    friend TTensor<TElemA> operator/(const TTensor<TElemA>& a,
-                                     const TTensor<TElemB>& b)
+    template <typename TElemB>
+    friend TTensor<TElem> operator/(const TTensor<TElem>&  a,
+                                    const TTensor<TElemB>& b)
     {
-        TTensor<TElemA> out(a);
+        TTensor<TElem> out(a);
         out /= b;
         return out;
     }

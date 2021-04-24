@@ -16,14 +16,14 @@ public:
             throw std::invalid_argument(
                 "Maximal one node per call for sum connector");
         }
-        return TIndex{1};
+        return TIndex{};
     }
 
     void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
                         TNode<TElem>* output_node) override
     {
-        output_node->value(0) = 0;
-        output_node->value(0) += std::accumulate(
+        output_node->value() = 0;
+        output_node->value() += std::accumulate(
             input_nodes.front()->values().begin(),
             input_nodes.front()->values().end(), static_cast<TElem>(0));
     }
@@ -31,7 +31,7 @@ public:
     void backwardHandler(const TNode<TElem>*             output_node,
                          std::vector<TNodeShPtr<TElem>>& input_nodes) override
     {
-        TElem output_grad = output_node->grad(0);
+        TElem output_grad = output_node->grad();
         for (auto& val : input_nodes.front()->gradient()) {
             val += output_grad;
         }
