@@ -11,21 +11,21 @@ class Tensor1DTest : public ::testing::TestWithParam<size_t> {
 
 TEST(Tensor0DTest, scalar)
 {
-    TTensor<float> t0;
-    TTensor<float> t1({});
-    TTensor<float> t2;
-    TTensor<float> t3;
+    Tensor<float> t0;
+    Tensor<float> t1({});
+    Tensor<float> t2;
+    Tensor<float> t3;
 
     t0() = 0;
     t1() = 1;
     t2() = 2;
     t3() = 3;
 
-    TTensor<float> res = ((t0 + t1) * t2 - t3) / t2;
+    Tensor<float> res = ((t0 + t1) * t2 - t3) / t2;
     EXPECT_EQ(res(), -0.5);
 
-    TTensor<float> t_view = t1.viewAs({1, 1, 1});
-    t_view(0, 0, 0)       = 123;
+    Tensor<float> t_view = t1.viewAs({1, 1, 1});
+    t_view(0, 0, 0)      = 123;
 
     EXPECT_EQ(t1(), 123);
 
@@ -40,7 +40,7 @@ TEST_P(Tensor1DTest, size)
 {
     size_t size = GetParam();
 
-    TTensor<int> t{size};
+    Tensor<int> t{size};
 
     for (size_t i = 0; i < size; i++) {
         t(i) = i;
@@ -67,7 +67,7 @@ TEST_P(Tensor2DTest, size)
     size_t dim1 = pair.first;
     size_t dim2 = pair.second;
 
-    TTensor<int> t({dim1, dim2});
+    Tensor<int> t({dim1, dim2});
 
     for (size_t i = 0; i < dim1; i++) {
         for (size_t j = 0; j < dim2; j++) {
@@ -93,7 +93,7 @@ TEST_P(Tensor3DTest, size)
 {
     auto shape = GetParam();
 
-    TTensor<int> t(shape);
+    Tensor<int> t(shape);
 
     for (size_t i = 0; i < shape[0]; i++) {
         for (size_t j = 0; j < shape[1]; j++) {
@@ -111,7 +111,7 @@ TEST_P(Tensor3DTest, size)
         }
         i++;
     }
-    TTensor<int> t2 = t;
+    Tensor<int> t2 = t;
 
     for (size_t i = 0; i < t2.shapeFlattened(-1); i++) {
         t2(i) *= 2;
@@ -126,7 +126,7 @@ TEST_P(Tensor3DTest, size)
         i++;
     }
 
-    TTensor<int> t3 = t;
+    Tensor<int> t3 = t;
 
     for (size_t i = 0; i < t3.shapeFlattened(-2); i++) {
         for (size_t j = 0; j < t3.shape(-1); j++) {
@@ -151,7 +151,7 @@ TEST_P(Tensor4DTest, size)
 {
     auto shape = GetParam();
 
-    TTensor<int> t(shape);
+    Tensor<int> t(shape);
 
     for (size_t i = 0; i < shape[0]; i++) {
         for (size_t j = 0; j < shape[1]; j++) {
@@ -172,7 +172,7 @@ TEST_P(Tensor4DTest, size)
         }
         i++;
     }
-    TTensor<int> t2 = t;
+    Tensor<int> t2 = t;
 
     for (size_t i = 0; i < t2.shapeFlattened(-1); i++) {
         t2(i) *= 2;
@@ -187,7 +187,7 @@ TEST_P(Tensor4DTest, size)
         i++;
     }
 
-    TTensor<int> t3 = t;
+    Tensor<int> t3 = t;
 
     for (size_t i = 0; i < t3.shapeFlattened(-2); i++) {
         for (size_t j = 0; j < t3.shape(-1); j++) {
@@ -204,7 +204,7 @@ TEST_P(Tensor4DTest, size)
         i++;
     }
 
-    TTensor<int> t4 = t;
+    Tensor<int> t4 = t;
 
     for (size_t i = 0; i < t4.shapeFlattened(1); i++) {
         for (size_t j = 0; j < t4.shape(-2); j++) {
@@ -283,8 +283,8 @@ INSTANTIATE_TEST_SUITE_P(Tensor4DTestAllTests, Tensor4DTest,
 
 TEST(ViewTest, CompressAtEnd)
 {
-    TTensor<int> t({2, 2, 2});
-    TTensor<int> t_view = t.viewAs({2, 4});
+    Tensor<int> t({2, 2, 2});
+    Tensor<int> t_view = t.viewAs({2, 4});
     for (size_t i = 0; i < t_view.shape(0); ++i) {
         for (size_t j = 0; j < t_view.shape(1); j++) {
             t_view(i, j) = i + j;
@@ -302,8 +302,8 @@ TEST(ViewTest, CompressAtEnd)
 
 TEST(ViewTest, CompressAtFront)
 {
-    TTensor<int> t({2, 2, 2});
-    TTensor<int> t_view = t.viewAs({4, 2});
+    Tensor<int> t({2, 2, 2});
+    Tensor<int> t_view = t.viewAs({4, 2});
     for (size_t i = 0; i < t_view.shape(0); ++i) {
         for (size_t j = 0; j < t_view.shape(1); j++) {
             t_view(i, j) = i + j;
@@ -321,8 +321,8 @@ TEST(ViewTest, CompressAtFront)
 
 TEST(ViewTest, CompressAtMiddle)
 {
-    TTensor<int> t({2, 2, 2, 2});
-    TTensor<int> t_view = t.viewAs({2, 4, 2});
+    Tensor<int> t({2, 2, 2, 2});
+    Tensor<int> t_view = t.viewAs({2, 4, 2});
     for (size_t i = 0; i < t_view.shape(0); ++i) {
         for (size_t j = 0; j < t_view.shape(1); j++) {
             for (size_t k = 0; k < t_view.shape(2); k++) {
@@ -344,7 +344,7 @@ TEST(ViewTest, CompressAtMiddle)
 
 TEST(AppendAxis, AppendRight)
 {
-    TTensor<int> t({2});
+    Tensor<int> t({2});
     t.appendAxis(2);
     t.appendAxis();
     t.setFlattenedValues({0, 1, 2, 3});
@@ -361,7 +361,7 @@ TEST(AppendAxis, AppendRight)
 
 TEST(AppendAxis, AppendLeft)
 {
-    TTensor<int> t({4});
+    Tensor<int> t({4});
     t.prependAxis();
     t.setFlattenedValues({0, 1, 2, 3});
     std::cout << t << std::endl;
@@ -375,7 +375,7 @@ TEST(AppendAxis, AppendLeft)
 
 TEST(ViewTest, InvalidView)
 {
-    TTensor<int> t({2, 2, 3});
+    Tensor<int> t({2, 2, 3});
     ASSERT_THROW(t.viewAs({6, 2}), std::domain_error);
     ASSERT_THROW(t.viewAs({6, 3}), std::domain_error);
     ASSERT_NO_THROW(t.viewAs({2, 6}));
@@ -385,41 +385,41 @@ TEST(ViewTest, InvalidView)
 
 TEST(ViewTest, ShrinkTest)
 {
-    TTensor<int> t({2});
-    TTensor<int> t_view = t.shrinkToNDimsFromLeft(2);
-    EXPECT_EQ(t_view.shape(), TIndex({2, 1}));
+    Tensor<int> t({2});
+    Tensor<int> t_view = t.shrinkToNDimsFromLeft(2);
+    EXPECT_EQ(t_view.shape(), Index({2, 1}));
     t_view = t.shrinkToNDimsFromLeft(3);
-    EXPECT_EQ(t_view.shape(), TIndex({2, 1, 1}));
+    EXPECT_EQ(t_view.shape(), Index({2, 1, 1}));
 
     t_view = t.shrinkToNDimsFromRight(3);
-    EXPECT_EQ(t_view.shape(), TIndex({1, 1, 2}));
+    EXPECT_EQ(t_view.shape(), Index({1, 1, 2}));
 
-    t      = TTensor<int>({2, 2});
+    t      = Tensor<int>({2, 2});
     t_view = t.shrinkToNDimsFromLeft(2);
-    EXPECT_EQ(t_view.shape(), TIndex({2, 2}));
+    EXPECT_EQ(t_view.shape(), Index({2, 2}));
     t_view = t.shrinkToNDimsFromRight(2);
-    EXPECT_EQ(t_view.shape(), TIndex({2, 2}));
+    EXPECT_EQ(t_view.shape(), Index({2, 2}));
 
-    t      = TTensor<int>({2, 2, 2});
+    t      = Tensor<int>({2, 2, 2});
     t_view = t.shrinkToNDimsFromLeft(2);
-    EXPECT_EQ(t_view.shape(), TIndex({2, 4}));
-
-    t_view = t.shrinkToNDimsFromRight(2);
-    EXPECT_EQ(t_view.shape(), TIndex({4, 2}));
-
-    t      = TTensor<int>({2, 2, 2, 2});
-    t_view = t.shrinkToNDimsFromLeft(2);
-    EXPECT_EQ(t_view.shape(), TIndex({2, 8}));
+    EXPECT_EQ(t_view.shape(), Index({2, 4}));
 
     t_view = t.shrinkToNDimsFromRight(2);
-    EXPECT_EQ(t_view.shape(), TIndex({8, 2}));
+    EXPECT_EQ(t_view.shape(), Index({4, 2}));
 
-    t      = TTensor<int>({});
+    t      = Tensor<int>({2, 2, 2, 2});
+    t_view = t.shrinkToNDimsFromLeft(2);
+    EXPECT_EQ(t_view.shape(), Index({2, 8}));
+
+    t_view = t.shrinkToNDimsFromRight(2);
+    EXPECT_EQ(t_view.shape(), Index({8, 2}));
+
+    t      = Tensor<int>({});
     t_view = t.shrinkToNDimsFromRight(3);
-    EXPECT_EQ(t_view.shape(), TIndex({1, 1, 1}));
+    EXPECT_EQ(t_view.shape(), Index({1, 1, 1}));
 
     t_view = t.shrinkToNDimsFromLeft(3);
-    EXPECT_EQ(t_view.shape(), TIndex({1, 1, 1}));
+    EXPECT_EQ(t_view.shape(), Index({1, 1, 1}));
 }
 
 int main(int argc, char** argv)

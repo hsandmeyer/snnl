@@ -17,12 +17,12 @@ TEST_P(OneDenseConnectorTest, input_shape)
 {
     auto shape = GetParam();
 
-    TNodeShPtr<float> input = TNode<float>::create(shape);
+    NodeShPtr<float> input = Node<float>::create(shape);
 
     input->values().arangeAlongAxis(-1, 0, input->values().shape(-1) * 2);
 
-    TDenseModuleShPtr<float> encode =
-        TModule<float>::create<TDenseModule>(shape.back(), 32ul);
+    DenseModuleShPtr<float> encode =
+        Module<float>::create<DenseModule>(shape.back(), 32ul);
 
     auto weights = encode->W();
     auto bias    = encode->B();
@@ -36,9 +36,9 @@ TEST_P(OneDenseConnectorTest, input_shape)
 
     bias->setAllValues(1);
 
-    TNodeShPtr<float> out = encode->call(input);
+    NodeShPtr<float> out = encode->call(input);
 
-    out->values().forEach([&](const TIndex& index) {
+    out->values().forEach([&](const Index& index) {
         if (!this->HasFatalFailure()) {
             ASSERT_FLOAT_EQ(out->value(index), 1 + 2 * index[-1]);
         }
@@ -49,11 +49,11 @@ TEST_P(MultiDenseConnectorTest, input_shape)
 {
     auto shape = GetParam();
 
-    TNodeShPtr<float>        input = TNode<float>::create(shape);
-    TDenseModuleShPtr<float> encode =
-        TModule<float>::create<TDenseModule>(shape.back(), 32ul);
-    TDenseModuleShPtr<float> decode =
-        TModule<float>::create<TDenseModule>(32ul, 128ul);
+    NodeShPtr<float>        input = Node<float>::create(shape);
+    DenseModuleShPtr<float> encode =
+        Module<float>::create<DenseModule>(shape.back(), 32ul);
+    DenseModuleShPtr<float> decode =
+        Module<float>::create<DenseModule>(32ul, 128ul);
 
     input->values().setAllValues(1);
 
@@ -63,10 +63,10 @@ TEST_P(MultiDenseConnectorTest, input_shape)
     decode->W()->setAllValues(1);
     decode->B()->setAllValues(1);
 
-    TNodeShPtr<float> out = encode->call(input);
-    out                   = decode->call(out);
+    NodeShPtr<float> out = encode->call(input);
+    out                  = decode->call(out);
 
-    out->values().forEach([&](const TIndex& index) {
+    out->values().forEach([&](const Index& index) {
         if (!this->HasFatalFailure()) {
             ASSERT_FLOAT_EQ(
                 decode->W()->shape(1) * (encode->W()->shape(1) + 1) + 1,
@@ -92,34 +92,34 @@ TEST(OwnershipTransfer, linear)
 {
     // TODO: Proper deregistration
 
-    TNodeShPtr<float> input = TNode<float>::create({1});
+    NodeShPtr<float> input = Node<float>::create({1});
     input->values().setFlattenedValues({1});
 
-    TNodeShPtr<float> out;
+    NodeShPtr<float> out;
     {
-        auto sum = TConnector<float>::create<TSumConnector>();
+        auto sum = Connector<float>::create<SumConnector>();
         out      = sum->call(input);
         out      = sum->call(out);
         out      = sum->call(out);
     }
 
-    EXPECT_FLOAT_EQ(out->value(0), 1.0f);
+    EXPECT_FLOAT_EQ(out->value(), 1.0f);
 }
 
 TEST(ComplexGraph, complex_graph)
 {
 
-    auto dense_1 = TModule<float>::create<TDenseModule>(2, 2);
+    auto dense_1 = Module<float>::create<DenseModule>(2, 2);
 
-    TConnectorShPtr<float> sigmoid =
-        TConnector<float>::create<TSigmoidConnector>();
+    ConnectorShPtr<float> sigmoid =
+        Connector<float>::create<SigmoidConnector>();
 
-    TConnectorShPtr<float> add = TConnector<float>::create<TAddConnector>();
-    TConnectorShPtr<float> sum = TConnector<float>::create<TSumConnector>();
+    ConnectorShPtr<float> add = Connector<float>::create<AddConnector>();
+    ConnectorShPtr<float> sum = Connector<float>::create<SumConnector>();
 
     // Two inputs
-    TNodeShPtr<float> input_1 = TNode<float>::create({2, 2});
-    TNodeShPtr<float> input_2 = TNode<float>::create({2, 2});
+    NodeShPtr<float> input_1 = Node<float>::create({2, 2});
+    NodeShPtr<float> input_2 = Node<float>::create({2, 2});
 
     input_1->values().setFlattenedValues({1, 2, 3, 4});
     input_2->values().setFlattenedValues({3.141, 1.414, 0., 42.});
@@ -151,7 +151,7 @@ TEST(ComplexGraph, complex_graph)
     auto res = sum->call(combined);
 
     // For check of correct result: See check.py
-    EXPECT_FLOAT_EQ(res->value(0), 8.360636886487102);
+    EXPECT_FLOAT_EQ(res->value(), 8.360636886487102);
 }
 
 int main(int argc, char** argv)

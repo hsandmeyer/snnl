@@ -20,11 +20,11 @@ void compRel(TElem a, TElem b, TElem rel_prec)
     }
 }
 
-void test_node_grad(TNode<double>& node, TModule<double>& model,
-                    std::vector<TNodeShPtr<double>>& inputs)
+void test_node_grad(Node<double>& node, Module<double>& model,
+                    std::vector<NodeShPtr<double>>& inputs)
 {
 
-    node.values().forEach([&](const TIndex& index) {
+    node.values().forEach([&](const Index& index) {
         double eps        = 1e-4;
         double val_weight = node.value(index);
 
@@ -32,12 +32,12 @@ void test_node_grad(TNode<double>& node, TModule<double>& model,
 
         auto loss = model.call(inputs);
 
-        double val_loss_up = loss->value(0);
+        double val_loss_up = loss->value();
         node.value(index)  = val_weight - eps;
 
         loss = model.call(inputs);
 
-        double val_loss_down = loss->value(0);
+        double val_loss_down = loss->value();
 
         node.value(index) = val_weight;
 
@@ -49,11 +49,11 @@ void test_node_grad(TNode<double>& node, TModule<double>& model,
     });
 }
 
-void test_grad(TModule<double>& model, std::vector<TNodeShPtr<double>> inputs)
+void test_grad(Module<double>& model, std::vector<NodeShPtr<double>> inputs)
 {
     auto loss = model.call(inputs);
     loss->iterateWeights(
-        [&](TNode<double>& weight) { test_node_grad(weight, model, inputs); });
+        [&](Node<double>& weight) { test_node_grad(weight, model, inputs); });
 }
 
 class LinearConnectorTest
@@ -62,25 +62,25 @@ class LinearConnectorTest
 
 TEST_P(LinearConnectorTest, input_shape)
 {
-    struct LinearModel : public TModule<double> {
-        std::shared_ptr<TDenseModule<double>> dense;
+    struct LinearModel : public Module<double> {
+        std::shared_ptr<DenseModule<double>> dense;
 
         LinearModel(std::vector<size_t> shape)
         {
-            dense = this->addModule<TDenseModule>(shape.back(), 8ul);
+            dense = this->addModule<DenseModule>(shape.back(), 8ul);
         }
 
-        virtual TNodeShPtr<double>
-        callHandler(std::vector<TNodeShPtr<double>> inputs) override
+        virtual NodeShPtr<double>
+        callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
-            TNodeShPtr<double> tmp = dense->call(inputs.at(0));
-            tmp                    = Sigmoid(tmp);
+            NodeShPtr<double> tmp = dense->call(inputs.at(0));
+            tmp                   = Sigmoid(tmp);
             return Sum(tmp);
         }
     };
 
-    auto               shape = GetParam();
-    TNodeShPtr<double> input = TNode<double>::create(shape);
+    auto              shape = GetParam();
+    NodeShPtr<double> input = Node<double>::create(shape);
 
     input->values().uniform();
 
@@ -89,7 +89,7 @@ TEST_P(LinearConnectorTest, input_shape)
     model.dense->W()->values().uniform();
     model.dense->B()->values().uniform();
 
-    TNodeShPtr<double> out = model.call(input);
+    NodeShPtr<double> out = model.call(input);
 
     // Multiple times to ensure that zeroGrad works correctly
     out->computeGrad();
@@ -110,33 +110,33 @@ class SkipConnectorTest : public ::testing::TestWithParam<std::vector<size_t>> {
 TEST_P(SkipConnectorTest, input_shape)
 {
 
-    struct SkipModel : TModule<double> {
-        TDenseModuleShPtr<double> dense_1;
-        TDenseModuleShPtr<double> dense_2;
+    struct SkipModel : Module<double> {
+        DenseModuleShPtr<double> dense_1;
+        DenseModuleShPtr<double> dense_2;
 
         SkipModel(std::vector<size_t> shape)
         {
-            dense_1 = addModule<TDenseModule>(shape.back(), 8ul);
-            dense_2 = addModule<TDenseModule>(shape.back(), 8ul);
+            dense_1 = addModule<DenseModule>(shape.back(), 8ul);
+            dense_2 = addModule<DenseModule>(shape.back(), 8ul);
         }
 
-        virtual TNodeShPtr<double>
-        callHandler(std::vector<TNodeShPtr<double>> inputs) override
+        virtual NodeShPtr<double>
+        callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
-            TNodeShPtr<double> tmp_1 = dense_1->call(inputs[0]);
-            tmp_1                    = Sigmoid(tmp_1);
+            NodeShPtr<double> tmp_1 = dense_1->call(inputs[0]);
+            tmp_1                   = Sigmoid(tmp_1);
 
-            TNodeShPtr<double> tmp_2 = dense_2->call(tmp_1);
-            tmp_2                    = Sigmoid(tmp_2);
+            NodeShPtr<double> tmp_2 = dense_2->call(tmp_1);
+            tmp_2                   = Sigmoid(tmp_2);
 
-            TNodeShPtr<double> comb = Add(tmp_1, tmp_2);
+            NodeShPtr<double> comb = Add(tmp_1, tmp_2);
 
             return Sum(comb);
         }
     };
 
-    auto               shape = GetParam();
-    TNodeShPtr<double> input = TNode<double>::create(shape);
+    auto              shape = GetParam();
+    NodeShPtr<double> input = Node<double>::create(shape);
 
     input->values().uniform();
     SkipModel model(shape);
@@ -163,13 +163,13 @@ INSTANTIATE_TEST_SUITE_P(BackwardTests, SkipConnectorTest,
 TEST(BackwardTests, ComplexGraph)
 {
 
-    struct ComplexModel : TModule<double> {
-        TDenseModuleShPtr<double> dense;
+    struct ComplexModel : Module<double> {
+        DenseModuleShPtr<double> dense;
 
-        ComplexModel() { dense = addModule<TDenseModule>(8ul, 8ul); }
+        ComplexModel() { dense = addModule<DenseModule>(8ul, 8ul); }
 
-        virtual TNodeShPtr<double>
-        callHandler(std::vector<TNodeShPtr<double>> inputs) override
+        virtual NodeShPtr<double>
+        callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
             auto tmp_1_0 = dense->call(Sin(inputs[0]));
             tmp_1_0      = Sigmoid(tmp_1_0);
@@ -198,8 +198,8 @@ TEST(BackwardTests, ComplexGraph)
     ComplexModel model;
 
     // Two inputs
-    TNodeShPtr<double> input_1 = TNode<double>::create({4, 8});
-    TNodeShPtr<double> input_2 = TNode<double>::create({4, 8});
+    NodeShPtr<double> input_1 = Node<double>::create({4, 8});
+    NodeShPtr<double> input_2 = Node<double>::create({4, 8});
 
     input_1->values().uniform();
     input_2->values().uniform();

@@ -5,22 +5,22 @@
 namespace snnl {
 
 template <class TElem>
-class TSumConnector : public TConnector<TElem> {
+class SumConnector : public Connector<TElem> {
 public:
-    virtual ~TSumConnector() {}
+    virtual ~SumConnector() {}
 
-    TIndex
-    outputDims(const std::vector<TNodeShPtr<TElem>>& input_nodes) const override
+    Index
+    outputDims(const std::vector<NodeShPtr<TElem>>& input_nodes) const override
     {
         if (input_nodes.size() > 1) {
             throw std::invalid_argument(
                 "Maximal one node per call for sum connector");
         }
-        return TIndex{};
+        return Index{};
     }
 
-    void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
-                        TNode<TElem>* output_node) override
+    void forwardHandler(const std::vector<NodeShPtr<TElem>>& input_nodes,
+                        Node<TElem>* output_node) override
     {
         output_node->value() = 0;
         output_node->value() += std::accumulate(
@@ -28,8 +28,8 @@ public:
             input_nodes.front()->values().end(), static_cast<TElem>(0));
     }
 
-    void backwardHandler(const TNode<TElem>*             output_node,
-                         std::vector<TNodeShPtr<TElem>>& input_nodes) override
+    void backwardHandler(const Node<TElem>*             output_node,
+                         std::vector<NodeShPtr<TElem>>& input_nodes) override
     {
         TElem output_grad = output_node->grad();
         for (auto& val : input_nodes.front()->gradient()) {
@@ -39,9 +39,9 @@ public:
 };
 
 template <class TElem>
-TNodeShPtr<TElem> Sum(const TNodeShPtr<TElem>& node)
+NodeShPtr<TElem> Sum(const NodeShPtr<TElem>& node)
 {
-    return TConnector<TElem>::template apply<TSumConnector>(node);
+    return Connector<TElem>::template apply<SumConnector>(node);
 }
 
 } // namespace snnl

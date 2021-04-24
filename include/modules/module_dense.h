@@ -7,16 +7,16 @@
 namespace snnl {
 
 template <class TElem>
-class TDenseModule : public TModule<TElem> {
+class DenseModule : public Module<TElem> {
 
-    TNodeShPtr<TElem> _W;
-    TNodeShPtr<TElem> _B;
+    NodeShPtr<TElem> _W;
+    NodeShPtr<TElem> _B;
 
 public:
     size_t _input_units;
     size_t _output_units;
 
-    TDenseModule(size_t input_dim, size_t output_dim)
+    DenseModule(size_t input_dim, size_t output_dim)
         : _input_units(input_dim), _output_units(output_dim)
     {
         _W = this->addWeight({_output_units, _input_units});
@@ -26,8 +26,8 @@ public:
         _B->setAllValues(0);
     }
 
-    virtual TNodeShPtr<TElem>
-    callHandler(std::vector<TNodeShPtr<TElem>> inputs) override
+    virtual NodeShPtr<TElem>
+    callHandler(std::vector<NodeShPtr<TElem>> inputs) override
     {
         if (inputs.size() != 1) {
             throw std::invalid_argument(
@@ -37,12 +37,12 @@ public:
         return Dense(_W, _B, inputs.at(0));
     }
 
-    TNodeShPtr<TElem>& W() { return _W; }
+    NodeShPtr<TElem>& W() { return _W; }
 
-    TNodeShPtr<TElem>& B() { return _B; }
+    NodeShPtr<TElem>& B() { return _B; }
 };
 
 template <typename TElem>
-using TDenseModuleShPtr = std::shared_ptr<TDenseModule<TElem>>;
+using DenseModuleShPtr = std::shared_ptr<DenseModule<TElem>>;
 
 } // namespace snnl

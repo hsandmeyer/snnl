@@ -4,12 +4,12 @@
 namespace snnl {
 
 template <class TElem>
-class TSigmoidConnector : public TConnector<TElem> {
+class SigmoidConnector : public Connector<TElem> {
 public:
-    virtual ~TSigmoidConnector() {}
+    virtual ~SigmoidConnector() {}
 
-    TIndex
-    outputDims(const std::vector<TNodeShPtr<TElem>>& input_nodes) const override
+    Index
+    outputDims(const std::vector<NodeShPtr<TElem>>& input_nodes) const override
     {
         if (input_nodes.size() > 1) {
             throw std::invalid_argument(
@@ -18,10 +18,10 @@ public:
         return input_nodes.front()->shape();
     }
 
-    void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
-                        TNode<TElem>* output_node) override
+    void forwardHandler(const std::vector<NodeShPtr<TElem>>& input_nodes,
+                        Node<TElem>* output_node) override
     {
-        TNodeShPtr<TElem> input_node = input_nodes.front();
+        NodeShPtr<TElem> input_node = input_nodes.front();
 
         for (size_t ind = 0; ind < output_node->shapeFlattened(-1); ind++) {
             output_node->value(ind) =
@@ -30,10 +30,10 @@ public:
         }
     }
 
-    void backwardHandler(const TNode<TElem>*             output_node,
-                         std::vector<TNodeShPtr<TElem>>& input_nodes) override
+    void backwardHandler(const Node<TElem>*             output_node,
+                         std::vector<NodeShPtr<TElem>>& input_nodes) override
     {
-        TNodeShPtr<TElem> input_node = input_nodes.front();
+        NodeShPtr<TElem> input_node = input_nodes.front();
 
         for (size_t ind = 0; ind < output_node->shapeFlattened(-1); ind++) {
             TElem input_value = input_node->value(ind);
@@ -46,9 +46,9 @@ public:
 };
 
 template <class TElem>
-TNodeShPtr<TElem> Sigmoid(const TNodeShPtr<TElem>& node)
+NodeShPtr<TElem> Sigmoid(const NodeShPtr<TElem>& node)
 {
-    return TConnector<TElem>::template apply<TSigmoidConnector>(node);
+    return Connector<TElem>::template apply<SigmoidConnector>(node);
 }
 
 } // namespace snnl

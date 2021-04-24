@@ -7,37 +7,37 @@
 
 using namespace snnl;
 
-struct SinModel : public TModule<float> {
-    TDenseModuleShPtr<float> dense1;
-    TDenseModuleShPtr<float> dense2;
-    TDenseModuleShPtr<float> dense3;
+struct SinModel : public Module<float> {
+    DenseModuleShPtr<float> dense1;
+    DenseModuleShPtr<float> dense2;
+    DenseModuleShPtr<float> dense3;
 
     SinModel()
     {
-        dense1 = addModule<TDenseModule>(1, 64);
-        dense2 = addModule<TDenseModule>(64, 16);
-        dense3 = addModule<TDenseModule>(16, 1);
+        dense1 = addModule<DenseModule>(1, 64);
+        dense2 = addModule<DenseModule>(64, 16);
+        dense3 = addModule<DenseModule>(16, 1);
     }
 
-    virtual TNodeShPtr<float>
-    callHandler(std::vector<TNodeShPtr<float>> input) override
+    virtual NodeShPtr<float>
+    callHandler(std::vector<NodeShPtr<float>> input) override
     {
-        TNodeShPtr<float> out = dense1->call(input);
-        out                   = Sigmoid(out);
-        out                   = dense2->call(out);
-        out                   = Sigmoid(out);
-        out                   = dense3->call(out);
+        NodeShPtr<float> out = dense1->call(input);
+        out                  = Sigmoid(out);
+        out                  = dense2->call(out);
+        out                  = Sigmoid(out);
+        out                  = dense3->call(out);
         return out;
     }
 };
 
 int main()
 {
-    size_t            batch_size = 4;
-    TNodeShPtr<float> input      = TNode<float>::create({batch_size, 1});
-    SinModel          model;
+    size_t           batch_size = 4;
+    NodeShPtr<float> input      = Node<float>::create({batch_size, 1});
+    SinModel         model;
 
-    TSGDOptimizer<float> optimizer(1e-1);
+    SGDOptimizer<float> optimizer(1e-1);
 
     for (size_t step = 0; step < 100000; step++) {
         input->values().uniform(-M_PI, M_PI);
@@ -45,8 +45,8 @@ int main()
         auto correct = Sin(input);
         correct->disconnect();
 
-        TNodeShPtr<float> out  = model.call(input);
-        TNodeShPtr<float> loss = MSE(correct, out);
+        NodeShPtr<float> out  = model.call(input);
+        NodeShPtr<float> loss = MSE(correct, out);
 
         loss->computeGrad();
 

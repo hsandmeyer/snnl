@@ -14,11 +14,11 @@
 
 namespace snnl {
 template <class TElem>
-class TTensor {
+class Tensor {
 
     size_t _NDims;
-    TIndex _shape;
-    TIndex _strides;
+    Index  _shape;
+    Index  _strides;
 
     std::mt19937_64                     _rng;
     std::shared_ptr<std::vector<TElem>> _data = {};
@@ -90,7 +90,7 @@ class TTensor {
     // For scalar
     size_t dataOffset() const { return 0; }
 
-    void stream(TIndex& ind, int dim, std::ostream& o) const
+    void stream(Index& ind, int dim, std::ostream& o) const
     {
         if (_NDims == 0) {
             o << (*_data)[0];
@@ -122,19 +122,19 @@ class TTensor {
         }
     }
 
-    friend std::ostream& operator<<(std::ostream& o, const TTensor& t)
+    friend std::ostream& operator<<(std::ostream& o, const Tensor& t)
     {
 
-        TIndex index(t.NDims());
-        auto   p = o.precision();
+        Index index(t.NDims());
+        auto  p = o.precision();
         o.precision(6);
         t.stream(index, 0, o);
         o.precision(p);
         return o;
     }
 
-    void forEach(TIndex& index, int dim,
-                 std::function<TElem(const TIndex&)> caller)
+    void forEach(Index& index, int dim,
+                 std::function<TElem(const Index&)> caller)
     {
 
         if (dim + 1 < NDims()) {
@@ -156,8 +156,8 @@ class TTensor {
         }
     }
 
-    void forEach(TIndex& index, int dim,
-                 std::function<void(const TIndex&)> caller)
+    void forEach(Index& index, int dim,
+                 std::function<void(const Index&)> caller)
     {
 
         if (dim + 1 < NDims()) {
@@ -184,14 +184,14 @@ public:
     typedef typename std::vector<TElem>::const_iterator const_iterator;
 
     // TODO: global seed
-    TTensor()
+    Tensor()
         : _NDims(0), _rng(time(NULL)),
           _data(std::make_shared<std::vector<TElem>>())
     {
         fillDims(std::array<size_t, 0>{});
     }
 
-    TTensor(const std::initializer_list<size_t> shape)
+    Tensor(const std::initializer_list<size_t> shape)
         : _NDims(shape.size()), _rng(time(NULL)),
           _data(std::make_shared<std::vector<TElem>>())
     {
@@ -199,25 +199,25 @@ public:
     }
 
     template <typename TArray>
-    TTensor(const TArray& shape)
+    Tensor(const TArray& shape)
         : _NDims(shape.size()), _rng(time(NULL)),
           _data(std::make_shared<std::vector<TElem>>())
     {
         fillDims(shape);
     }
 
-    TTensor(const TTensor& other)
+    Tensor(const Tensor& other)
         : _NDims(other._NDims), _shape(other._shape), _strides(other._strides),
           _rng(other._rng),
           _data(std::make_shared<std::vector<TElem>>(*other._data))
     {
     }
 
-    TTensor(TTensor&& shape) = default;
+    Tensor(Tensor&& shape) = default;
 
-    TTensor& operator=(TTensor&& shape) = default;
+    Tensor& operator=(Tensor&& shape) = default;
 
-    TTensor& operator=(const TTensor& other)
+    Tensor& operator=(const Tensor& other)
     {
         _NDims   = other._NDims;
         _shape   = other._shape;
@@ -227,15 +227,15 @@ public:
         return *this;
     }
 
-    void forEach(std::function<void(const TIndex&)> func)
+    void forEach(std::function<void(const Index&)> func)
     {
-        TIndex index(NDims());
+        Index index(NDims());
         forEach(index, 0, func);
     }
 
-    void modifyForEach(std::function<TElem(const TIndex&)> func)
+    void modifyForEach(std::function<TElem(const Index&)> func)
     {
-        TIndex index(NDims());
+        Index index(NDims());
         forEach(index, 0, func);
     }
 
@@ -255,7 +255,7 @@ public:
             return;
         }
 
-        modifyForEach([&](const TIndex& index) -> TElem {
+        modifyForEach([&](const Index& index) -> TElem {
             return start + index[axis] * step;
         });
     }
@@ -294,15 +294,15 @@ public:
         fillStrides(false);
     }
 
-    TTensor<TElem> viewAs(std::initializer_list<size_t> shape)
+    Tensor<TElem> viewAs(std::initializer_list<size_t> shape)
     {
         return viewAs(std::vector<size_t>(shape.begin(), shape.end()));
     }
 
     template <typename TArray>
-    TTensor<TElem> viewAs(const TArray& arr)
+    Tensor<TElem> viewAs(const TArray& arr)
     {
-        TTensor out;
+        Tensor out;
         out._data = _data;
 
         out.setDims(arr);
@@ -385,13 +385,13 @@ public:
 #endif
     }
 
-    const TElem& operator()(const TIndex& index_vec) const
+    const TElem& operator()(const Index& index_vec) const
     {
         return const_cast<TElem&>(
-            (*const_cast<TTensor<TElem>*>(this))(index_vec));
+            (*const_cast<Tensor<TElem>*>(this))(index_vec));
     }
 
-    TElem& operator()(const TIndex& index_vec)
+    TElem& operator()(const Index& index_vec)
     {
 #ifdef DEBUG
         return (*_data)[index(index_vec)];
@@ -400,7 +400,7 @@ public:
 #endif
     }
 
-    size_t index(const TIndex& index_vec) const
+    size_t index(const Index& index_vec) const
     {
 #ifdef DEBUG
         if (index_vec.size() > _NDims) {
@@ -447,14 +447,14 @@ public:
         return _strides[i];
     }
 
-    TIndex& shape() { return _shape; }
+    Index& shape() { return _shape; }
 
-    const TIndex& shape() const { return _shape; }
+    const Index& shape() const { return _shape; }
 
-    TTensor<TElem> shrinkToNDimsFromRight(const size_t NDims)
+    Tensor<TElem> shrinkToNDimsFromRight(const size_t NDims)
     {
-        TIndex newShape(NDims);
-        long   shape_ind = 0;
+        Index newShape(NDims);
+        long  shape_ind = 0;
 
         for (shape_ind = 1;
              shape_ind <= static_cast<long>(std::min(_NDims, NDims - 1));
@@ -472,9 +472,9 @@ public:
         return viewAs(newShape);
     }
 
-    TTensor<TElem> shrinkToNDimsFromLeft(const size_t NDims)
+    Tensor<TElem> shrinkToNDimsFromLeft(const size_t NDims)
     {
-        TIndex newShape(NDims);
+        Index  newShape(NDims);
         size_t shape_ind = 0;
 
         for (shape_ind = 0; shape_ind < std::min(_NDims, NDims - 1);
@@ -553,7 +553,7 @@ public:
     auto end() const { return _data->end(); }
 
     template <typename TElemOther>
-    TTensor& operator*=(const TTensor<TElemOther>& other)
+    Tensor& operator*=(const Tensor<TElemOther>& other)
     {
         if (other._shape != _shape) {
             throw std::invalid_argument("Operatr *=: Size missmatch");
@@ -566,7 +566,7 @@ public:
     }
 
     template <typename TElemOther>
-    TTensor& operator-=(const TTensor<TElemOther>& other)
+    Tensor& operator-=(const Tensor<TElemOther>& other)
     {
         if (other._shape != _shape) {
             throw std::invalid_argument("Operatr *=: Size missmatch");
@@ -579,7 +579,7 @@ public:
     }
 
     template <typename TElemOther>
-    TTensor& operator/=(const TTensor<TElemOther>& other)
+    Tensor& operator/=(const Tensor<TElemOther>& other)
     {
         if (other._shape != _shape) {
             throw std::invalid_argument("Operatr *=: Size missmatch");
@@ -592,7 +592,7 @@ public:
     }
 
     template <typename TElemOther>
-    TTensor& operator+=(const TTensor<TElemOther>& other)
+    Tensor& operator+=(const Tensor<TElemOther>& other)
     {
         if (other._shape != _shape) {
             throw std::invalid_argument("Operatr *=: Size missmatch");
@@ -605,37 +605,37 @@ public:
     }
 
     template <typename TElemB>
-    friend TTensor<TElem> operator+(const TTensor<TElem>&  a,
-                                    const TTensor<TElemB>& b)
+    friend Tensor<TElem> operator+(const Tensor<TElem>&  a,
+                                   const Tensor<TElemB>& b)
     {
-        TTensor<TElem> out(a);
+        Tensor<TElem> out(a);
         out += b;
         return out;
     }
 
     template <typename TElemB>
-    friend TTensor<TElem> operator-(const TTensor<TElem>&  a,
-                                    const TTensor<TElemB>& b)
+    friend Tensor<TElem> operator-(const Tensor<TElem>&  a,
+                                   const Tensor<TElemB>& b)
     {
-        TTensor<TElem> out(a);
+        Tensor<TElem> out(a);
         out -= b;
         return out;
     }
 
     template <typename TElemB>
-    friend TTensor<TElem> operator*(const TTensor<TElem>&  a,
-                                    const TTensor<TElemB>& b)
+    friend Tensor<TElem> operator*(const Tensor<TElem>&  a,
+                                   const Tensor<TElemB>& b)
     {
-        TTensor<TElem> out(a);
+        Tensor<TElem> out(a);
         out *= b;
         return out;
     }
 
     template <typename TElemB>
-    friend TTensor<TElem> operator/(const TTensor<TElem>&  a,
-                                    const TTensor<TElemB>& b)
+    friend Tensor<TElem> operator/(const Tensor<TElem>&  a,
+                                   const Tensor<TElemB>& b)
     {
-        TTensor<TElem> out(a);
+        Tensor<TElem> out(a);
         out /= b;
         return out;
     }

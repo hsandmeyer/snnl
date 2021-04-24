@@ -9,27 +9,27 @@
 namespace snnl {
 
 template <class TElem>
-class TNode : public std::enable_shared_from_this<TNode<TElem>> {
+class Node : public std::enable_shared_from_this<Node<TElem>> {
 
-    friend class TConnector<TElem>;
-    friend class TConnector<TElem>;
+    friend class Connector<TElem>;
+    friend class Connector<TElem>;
 
-    TTensor<TElem> _values;
-    TTensor<TElem> _gradient;
+    Tensor<TElem> _values;
+    Tensor<TElem> _gradient;
 
     bool _is_weight = false;
 
-    TConnectorShPtr<TElem> _prev_connector = nullptr;
+    ConnectorShPtr<TElem> _prev_connector = nullptr;
 
     // Extra variabels for tracking the backward call.
     // Connected nodes from the last forward call
-    std::unordered_set<TNode<TElem>*> _connected_nodes = {};
-    bool                              _needs_grad      = false;
-    size_t                            _backward_calls  = 0;
+    std::unordered_set<Node<TElem>*> _connected_nodes = {};
+    bool                             _needs_grad      = false;
+    size_t                           _backward_calls  = 0;
 
-    TNode() = default;
+    Node() = default;
 
-    void collectNodesInternal(std::unordered_set<TNodeShPtr<TElem>>& nodes)
+    void collectNodesInternal(std::unordered_set<NodeShPtr<TElem>>& nodes)
     {
         nodes.emplace(getPtr());
         if (_prev_connector) {
@@ -37,7 +37,7 @@ class TNode : public std::enable_shared_from_this<TNode<TElem>> {
         }
     }
 
-    void collectWeightsInternal(std::unordered_set<TNodeShPtr<TElem>>& weights)
+    void collectWeightsInternal(std::unordered_set<NodeShPtr<TElem>>& weights)
     {
         if (_prev_connector) {
             _prev_connector->collectWeightsInternal(this, weights);
@@ -45,7 +45,7 @@ class TNode : public std::enable_shared_from_this<TNode<TElem>> {
     }
 
     void collectConnectorsInternal(
-        std::unordered_set<TConnectorShPtr<TElem>>& connetors)
+        std::unordered_set<ConnectorShPtr<TElem>>& connetors)
     {
         if (_prev_connector) {
             _prev_connector->collectNodesInternal(this, connetors);
@@ -54,16 +54,15 @@ class TNode : public std::enable_shared_from_this<TNode<TElem>> {
 
 public:
     template <typename... TArgs>
-    static ::std::shared_ptr<TNode> create(TArgs&&... args)
+    static ::std::shared_ptr<Node> create(TArgs&&... args)
     {
-        return ::std::shared_ptr<TNode>(
-            new TNode(std::forward<TArgs>(args)...));
+        return ::std::shared_ptr<Node>(new Node(std::forward<TArgs>(args)...));
     }
 
-    static ::std::shared_ptr<TNode>
+    static ::std::shared_ptr<Node>
     create(const std::initializer_list<size_t> shape)
     {
-        return ::std::shared_ptr<TNode>(new TNode(shape));
+        return ::std::shared_ptr<Node>(new Node(shape));
     }
 
     template <typename... Args>
@@ -96,9 +95,9 @@ public:
 
     void setAllGrad(const TElem& grad) { _gradient.setAllValues(grad); }
 
-    TConnector<TElem>* prevConnector() { return _prev_connector; }
+    Connector<TElem>* prevConnector() { return _prev_connector; }
 
-    virtual ~TNode() { disconnect(); }
+    virtual ~Node() { disconnect(); }
 
     void computeGrad()
     {
@@ -114,12 +113,12 @@ public:
     void zeroGrad()
     {
         iterateNodes(
-            [](TNode<TElem>& node) { node.gradient().setAllValues(0); });
+            [](Node<TElem>& node) { node.gradient().setAllValues(0); });
         iterateWeights(
-            [](TNode<TElem>& weight) { weight.gradient().setAllValues(0); });
+            [](Node<TElem>& weight) { weight.gradient().setAllValues(0); });
     }
 
-    void iterateConnectors(std::function<void(TConnector<TElem>&)> func)
+    void iterateConnectors(std::function<void(Connector<TElem>&)> func)
     {
         auto all_connectors = collectConnectors();
         for (auto& conn : all_connectors) {
@@ -127,7 +126,7 @@ public:
         }
     }
 
-    void iterateNodes(std::function<void(TNode<TElem>&)> func)
+    void iterateNodes(std::function<void(Node<TElem>&)> func)
     {
         auto all_nodes = collectNodes();
         for (auto& node : all_nodes) {
@@ -135,7 +134,7 @@ public:
         }
     }
 
-    void iterateWeights(std::function<void(TNode<TElem>&)> func)
+    void iterateWeights(std::function<void(Node<TElem>&)> func)
     {
         auto all_weights = collectWeights();
         for (auto& weight : all_weights) {
@@ -143,40 +142,40 @@ public:
         }
     }
 
-    std::unordered_set<TNodeShPtr<TElem>> collectNodes()
+    std::unordered_set<NodeShPtr<TElem>> collectNodes()
     {
-        std::unordered_set<TNodeShPtr<TElem>> out;
+        std::unordered_set<NodeShPtr<TElem>> out;
         collectNodesInternal(out);
         return out;
     }
 
-    std::unordered_set<TNodeShPtr<TElem>> collectWeights()
+    std::unordered_set<NodeShPtr<TElem>> collectWeights()
     {
-        std::unordered_set<TNodeShPtr<TElem>> out;
+        std::unordered_set<NodeShPtr<TElem>> out;
         collectWeightsInternal(out);
         return out;
     }
 
-    std::unordered_set<TConnectorShPtr<TElem>> collectConnectors()
+    std::unordered_set<ConnectorShPtr<TElem>> collectConnectors()
     {
-        std::unordered_set<TConnectorShPtr<TElem>> out;
+        std::unordered_set<ConnectorShPtr<TElem>> out;
         collectConnectorsInternal(out);
         return out;
     }
 
-    TTensor<TElem>& values() { return _values; }
+    Tensor<TElem>& values() { return _values; }
 
-    const TTensor<TElem>& values() const { return _values; }
+    const Tensor<TElem>& values() const { return _values; }
 
-    TTensor<TElem>& gradient() { return _gradient; }
+    Tensor<TElem>& gradient() { return _gradient; }
 
-    const TTensor<TElem>& gradient() const { return _gradient; }
+    const Tensor<TElem>& gradient() const { return _gradient; }
 
     size_t shape(int i) const { return _values.shape(i); }
 
-    TIndex& shape() { return _values.shape(); }
+    Index& shape() { return _values.shape(); }
 
-    const TIndex& shape() const { return _values.shape(); }
+    const Index& shape() const { return _values.shape(); }
 
     template <typename TArray>
     void setDims(const TArray& arr)
@@ -207,21 +206,21 @@ public:
         }
     }
 
-    TNodeShPtr<TElem> getPtr() { return this->shared_from_this(); }
+    NodeShPtr<TElem> getPtr() { return this->shared_from_this(); }
 
 protected:
-    TNode(const TNode&) = delete;
+    Node(const Node&) = delete;
 
-    const TNode& operator=(const TNode&) = delete;
+    const Node& operator=(const Node&) = delete;
 
     template <typename TArray>
-    TNode(const TArray& shape, bool is_weight = false) : _is_weight(is_weight)
+    Node(const TArray& shape, bool is_weight = false) : _is_weight(is_weight)
     {
         setDims(shape);
     }
 
-    TNode(const std::initializer_list<size_t> shape)
-        : TNode(std::vector<size_t>(shape.begin(), shape.end()))
+    Node(const std::initializer_list<size_t> shape)
+        : Node(std::vector<size_t>(shape.begin(), shape.end()))
     {
     }
 
@@ -241,7 +240,7 @@ protected:
         }
     }
 
-    bool countConnectedNodesBackwards(TNode<TElem>* next_node = nullptr)
+    bool countConnectedNodesBackwards(Node<TElem>* next_node = nullptr)
     {
         if (next_node) {
             if (_connected_nodes.find(next_node) != _connected_nodes.end()) {
@@ -264,7 +263,7 @@ protected:
         return needs_grad;
     }
 
-    void connectPrevConnector(TConnectorShPtr<TElem>& prev)
+    void connectPrevConnector(ConnectorShPtr<TElem>& prev)
     {
         if (prev.get() == _prev_connector.get()) {
             return;

@@ -3,14 +3,14 @@
 
 namespace snnl {
 template <class TElem>
-class TAddConnector : public TConnector<TElem> {
+class AddConnector : public Connector<TElem> {
 public:
-    virtual ~TAddConnector() {}
+    virtual ~AddConnector() {}
 
-    TIndex
-    outputDims(const std::vector<TNodeShPtr<TElem>>& input_nodes) const override
+    Index
+    outputDims(const std::vector<NodeShPtr<TElem>>& input_nodes) const override
     {
-        TIndex out_shape = input_nodes.front()->shape();
+        Index out_shape = input_nodes.front()->shape();
 
         for (auto node_ptr : input_nodes) {
             if (node_ptr->shape() != out_shape) {
@@ -21,8 +21,8 @@ public:
         return out_shape;
     }
 
-    void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
-                        TNode<TElem>* output_node) override
+    void forwardHandler(const std::vector<NodeShPtr<TElem>>& input_nodes,
+                        Node<TElem>* output_node) override
     {
         output_node->setAllValues(0);
         for (auto& input_node_ptr : input_nodes) {
@@ -33,8 +33,8 @@ public:
         }
     }
 
-    void backwardHandler(const TNode<TElem>*             output_node,
-                         std::vector<TNodeShPtr<TElem>>& input_nodes) override
+    void backwardHandler(const Node<TElem>*             output_node,
+                         std::vector<NodeShPtr<TElem>>& input_nodes) override
     {
         for (auto& input_node_ptr : input_nodes) {
             for (size_t ind = 0; ind < output_node->values().shapeFlattened(-1);
@@ -46,9 +46,9 @@ public:
 };
 
 template <class TElem, class... TArgs>
-TNodeShPtr<TElem> Add(const TNodeShPtr<TElem>& node, const TArgs&... args)
+NodeShPtr<TElem> Add(const NodeShPtr<TElem>& node, const TArgs&... args)
 {
-    return TConnector<TElem>::template apply<TAddConnector>(node, args...);
+    return Connector<TElem>::template apply<AddConnector>(node, args...);
 }
 
 } // namespace snnl

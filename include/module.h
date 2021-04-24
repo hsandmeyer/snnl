@@ -7,21 +7,21 @@
 namespace snnl {
 
 template <class TElem>
-class TModule {
+class Module {
 protected:
-    std::set<TNodeShPtr<TElem>> _weights;
+    std::set<NodeShPtr<TElem>> _weights;
 
-    std::set<TModuleShPtr<TElem>> _modules;
+    std::set<ModuleShPtr<TElem>> _modules;
 
-    TNodeShPtr<TElem> addWeight(const std::initializer_list<size_t>& shape)
+    NodeShPtr<TElem> addWeight(const std::initializer_list<size_t>& shape)
     {
-        return addWeight(TIndex{shape});
+        return addWeight(Index{shape});
     }
 
     template <typename TArray>
-    TNodeShPtr<TElem> addWeight(const TArray& shape)
+    NodeShPtr<TElem> addWeight(const TArray& shape)
     {
-        TNodeShPtr<TElem> weight = TNode<TElem>::create(shape, true);
+        NodeShPtr<TElem> weight = Node<TElem>::create(shape, true);
         weight->setWeight(true);
 
         _weights.emplace(weight);
@@ -29,38 +29,38 @@ protected:
         return weight;
     }
 
-    template <template <class> class TChildModule, typename... TArgs>
-    std::shared_ptr<TChildModule<TElem>> addModule(TArgs&&... args)
+    template <template <class> class ChildModule, typename... TArgs>
+    std::shared_ptr<ChildModule<TElem>> addModule(TArgs&&... args)
     {
-        std::shared_ptr<TChildModule<TElem>> module =
-            TModule<TElem>::create<TChildModule>(std::forward<TArgs>(args)...);
+        std::shared_ptr<ChildModule<TElem>> module =
+            Module<TElem>::create<ChildModule>(std::forward<TArgs>(args)...);
         // Capture the weights of a child module to save them as well
         _weights.insert(module->weights().begin(), module->weights().end());
         return module;
     }
 
-    TModule<TElem>() = default;
+    Module<TElem>() = default;
 
-    virtual TNodeShPtr<TElem>
-    callHandler(std::vector<TNodeShPtr<TElem>> inputs) = 0;
+    virtual NodeShPtr<TElem>
+    callHandler(std::vector<NodeShPtr<TElem>> inputs) = 0;
 
 public:
-    const std::set<TNodeShPtr<TElem>>& weights() { return _weights; }
+    const std::set<NodeShPtr<TElem>>& weights() { return _weights; }
 
-    template <typename... TNodeShPtrs>
-    TNodeShPtr<TElem> call(const TNodeShPtrs&... prev_nodes)
+    template <typename... NodeShPtrs>
+    NodeShPtr<TElem> call(const NodeShPtrs&... prev_nodes)
     {
-        return callHandler(std::vector<TNodeShPtr<TElem>>{prev_nodes...});
+        return callHandler(std::vector<NodeShPtr<TElem>>{prev_nodes...});
     }
 
-    template <template <class> class TChildModule, typename... TArgs>
-    static ::std::shared_ptr<TChildModule<TElem>> create(TArgs&&... args)
+    template <template <class> class ChildModule, typename... TArgs>
+    static ::std::shared_ptr<ChildModule<TElem>> create(TArgs&&... args)
     {
-        return std::shared_ptr<TChildModule<TElem>>(
-            new TChildModule<TElem>(::std::forward<TArgs>(args)...));
+        return std::shared_ptr<ChildModule<TElem>>(
+            new ChildModule<TElem>(::std::forward<TArgs>(args)...));
     }
 
-    virtual ~TModule() {}
+    virtual ~Module() {}
 };
 
 } // namespace snnl

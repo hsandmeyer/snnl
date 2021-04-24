@@ -3,7 +3,7 @@
 #include <ostream>
 #include <vector>
 
-class TIndex {
+class Index {
     std::vector<size_t> _shape;
 
 public:
@@ -63,21 +63,21 @@ public:
 #endif
     }
 
-    TIndex(std::initializer_list<size_t> list) : _shape(list) {}
+    Index(std::initializer_list<size_t> list) : _shape(list) {}
 
-    TIndex(size_t size) : _shape(size) {}
+    Index(size_t size) : _shape(size) {}
 
-    TIndex() = default;
+    Index() = default;
 
-    TIndex(TIndex&) = default;
+    Index(Index&) = default;
 
-    TIndex(const TIndex&) = default;
+    Index(const Index&) = default;
 
-    TIndex(TIndex&&) = default;
+    Index(Index&&) = default;
 
-    TIndex& operator=(TIndex&&) = default;
+    Index& operator=(Index&&) = default;
 
-    TIndex& operator=(const TIndex&) = default;
+    Index& operator=(const Index&) = default;
 
     auto begin() { return _shape.begin(); }
 
@@ -107,11 +107,11 @@ public:
 
     size_t NDims() const { return _shape.size(); }
 
-    bool operator!=(const TIndex& b) const { return _shape != b._shape; }
+    bool operator!=(const Index& b) const { return _shape != b._shape; }
 
-    bool operator==(const TIndex& b) const { return _shape == b._shape; }
+    bool operator==(const Index& b) const { return _shape == b._shape; }
 
-    friend std::ostream& operator<<(std::ostream& o, TIndex ind)
+    friend std::ostream& operator<<(std::ostream& o, Index ind)
     {
         o << "{";
         for (size_t i = 0; i < ind._shape.size(); i++) {

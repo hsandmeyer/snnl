@@ -4,27 +4,21 @@
 namespace snnl {
 
 template <class TElem>
-class TConnectorBaseImpl;
+class Connector;
 
 template <class TElem>
-class TConnector;
+class Node;
 
 template <class TElem>
-class TNodeBaseImpl;
+class Module;
 
 template <class TElem>
-class TNode;
+using NodeShPtr = std::shared_ptr<Node<TElem>>;
 
 template <class TElem>
-class TModule;
+using ConnectorShPtr = std::shared_ptr<Connector<TElem>>;
 
 template <class TElem>
-using TNodeShPtr = std::shared_ptr<TNode<TElem>>;
-
-template <class TElem>
-using TConnectorShPtr = std::shared_ptr<TConnector<TElem>>;
-
-template <class TElem>
-using TModuleShPtr = std::shared_ptr<TModule<TElem>>;
+using ModuleShPtr = std::shared_ptr<Module<TElem>>;
 
 } // namespace snnl

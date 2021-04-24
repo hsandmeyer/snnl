@@ -5,25 +5,25 @@
 namespace snnl {
 
 template <typename TElem>
-class TOptimizer {
+class Optimizer {
 
     int _num_states_per_weight;
 
-    std::map<TNodeShPtr<TElem>, std::vector<TTensor<TElem>>> _states;
+    std::map<NodeShPtr<TElem>, std::vector<Tensor<TElem>>> _states;
 
-    virtual void optimizeGrad(TNode<TElem>&                weight,
-                              std::vector<TTensor<TElem>>& states) = 0;
+    virtual void optimizeGrad(Node<TElem>&                weight,
+                              std::vector<Tensor<TElem>>& states) = 0;
 
 public:
-    TOptimizer(int num_states_per_weight)
+    Optimizer(int num_states_per_weight)
         : _num_states_per_weight(num_states_per_weight)
     {
     }
 
-    void optimizeStep(TNodeShPtr<TElem> loss)
+    void optimizeStep(NodeShPtr<TElem> loss)
     {
-        loss->iterateWeights([&](TNode<TElem>& weight) {
-            TNodeShPtr<TElem> weight_ptr = weight.getPtr();
+        loss->iterateWeights([&](Node<TElem>& weight) {
+            NodeShPtr<TElem> weight_ptr = weight.getPtr();
 
             auto& states = _states[weight_ptr];
 
@@ -41,12 +41,12 @@ public:
 };
 
 template <typename TElem>
-class TSGDOptimizer : public TOptimizer<TElem> {
+class SGDOptimizer : public Optimizer<TElem> {
 
     TElem _learning_rate;
 
-    virtual void optimizeGrad(TNode<TElem>& weight,
-                              std::vector<TTensor<TElem>>&) override
+    virtual void optimizeGrad(Node<TElem>& weight,
+                              std::vector<Tensor<TElem>>&) override
     {
         for (size_t ind = 0; ind < weight.shapeFlattened(-1); ind++) {
             weight.value(ind) =
@@ -55,8 +55,8 @@ class TSGDOptimizer : public TOptimizer<TElem> {
     }
 
 public:
-    TSGDOptimizer(TElem learning_rate)
-        : TOptimizer<TElem>::TOptimizer(0), _learning_rate(learning_rate)
+    SGDOptimizer(TElem learning_rate)
+        : Optimizer<TElem>::Optimizer(0), _learning_rate(learning_rate)
     {
     }
 };

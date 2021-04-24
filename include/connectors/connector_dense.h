@@ -4,11 +4,11 @@
 namespace snnl {
 
 template <class TElem>
-class TDenseConnector : public TConnector<TElem> {
+class DenseConnector : public Connector<TElem> {
 
-    friend class TConnector<TElem>;
+    friend class Connector<TElem>;
 
-    void dimChecks(const std::vector<TNodeShPtr<TElem>>& input_nodes) const
+    void dimChecks(const std::vector<NodeShPtr<TElem>>& input_nodes) const
     {
         size_t input_units  = input_nodes.at(0)->shape(-1);
         size_t output_units = input_nodes.at(0)->shape(-2);
@@ -30,27 +30,27 @@ class TDenseConnector : public TConnector<TElem> {
         }
     }
 
-    TIndex
-    outputDims(const std::vector<TNodeShPtr<TElem>>& input_nodes) const override
+    Index
+    outputDims(const std::vector<NodeShPtr<TElem>>& input_nodes) const override
     {
         dimChecks(input_nodes);
 
-        TIndex out_shape = input_nodes.back()->shape();
-        out_shape[-1]    = input_nodes.front()->shape(-2);
+        Index out_shape = input_nodes.back()->shape();
+        out_shape[-1]   = input_nodes.front()->shape(-2);
         return out_shape;
     }
 
-    void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
-                        TNode<TElem>* output_node) override
+    void forwardHandler(const std::vector<NodeShPtr<TElem>>& input_nodes,
+                        Node<TElem>* output_node) override
     {
 
         dimChecks(input_nodes);
 
         auto& output = output_node->values();
 
-        TNode<TElem>& W = *input_nodes.at(0);
-        TNode<TElem>& B = *input_nodes.at(1);
-        TNode<TElem>& x = *input_nodes.at(2);
+        Node<TElem>& W = *input_nodes.at(0);
+        Node<TElem>& B = *input_nodes.at(1);
+        Node<TElem>& x = *input_nodes.at(2);
 
         if (x.NDims() > 1) {
             // TODO Generalize this using a better tensor loop with some
@@ -65,17 +65,6 @@ class TDenseConnector : public TConnector<TElem> {
                     }
                 }
             }
-            /*
-            output.forEach([&](const TIndex& ind_in) {
-                int i          = ind_in[-1];
-                output(ind_in) = _B->value(i);
-                auto ind_out   = ind_in;
-                for (size_t j = 0; j < x.shape(-1); j++) {
-                    ind_out[-1] = j;
-                    output(ind_in) += _W->value(i, j) * x(ind_out);
-                }
-            });
-            */
         }
         else {
             for (size_t i = 0; i < output.shape(-1); i++) {
@@ -87,14 +76,14 @@ class TDenseConnector : public TConnector<TElem> {
         }
     }
 
-    void backwardHandler(const TNode<TElem>*             output,
-                         std::vector<TNodeShPtr<TElem>>& input_nodes) override
+    void backwardHandler(const Node<TElem>*             output,
+                         std::vector<NodeShPtr<TElem>>& input_nodes) override
     {
         dimChecks(input_nodes);
 
-        TNode<TElem>& W = *input_nodes.at(0);
-        TNode<TElem>& B = *input_nodes.at(1);
-        TNode<TElem>& x = *input_nodes.at(2);
+        Node<TElem>& W = *input_nodes.at(0);
+        Node<TElem>& B = *input_nodes.at(1);
+        Node<TElem>& x = *input_nodes.at(2);
 
         if (x.NDims() > 1) {
             for (size_t higherDim = 0; higherDim < x.shapeFlattened(-2);
@@ -122,14 +111,14 @@ class TDenseConnector : public TConnector<TElem> {
     }
 
 public:
-    virtual ~TDenseConnector() {}
+    virtual ~DenseConnector() {}
 };
 
 template <class TElem>
-TNodeShPtr<TElem> Dense(const TNodeShPtr<TElem>& W, const TNodeShPtr<TElem>& b,
-                        const TNodeShPtr<TElem>& x)
+NodeShPtr<TElem> Dense(const NodeShPtr<TElem>& W, const NodeShPtr<TElem>& b,
+                       const NodeShPtr<TElem>& x)
 {
-    return TConnector<TElem>::template apply<TDenseConnector>(
+    return Connector<TElem>::template apply<DenseConnector>(
         std::move(W), std::move(b), std::move(x));
 }
 

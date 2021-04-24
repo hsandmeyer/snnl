@@ -4,12 +4,12 @@
 namespace snnl {
 
 template <class TElem>
-class TMSEConnector : public TConnector<TElem> {
+class MSEConnector : public Connector<TElem> {
 public:
-    virtual ~TMSEConnector() {}
+    virtual ~MSEConnector() {}
 
-    TIndex
-    outputDims(const std::vector<TNodeShPtr<TElem>>& input_nodes) const override
+    Index
+    outputDims(const std::vector<NodeShPtr<TElem>>& input_nodes) const override
     {
         if (input_nodes.size() != 2) {
             throw std::invalid_argument(
@@ -19,11 +19,11 @@ public:
             throw std::invalid_argument(
                 "Input nodes for MSE layer need to have exact same size");
         }
-        return TIndex{1};
+        return Index{1};
     }
 
-    void forwardHandler(const std::vector<TNodeShPtr<TElem>>& input_nodes,
-                        TNode<TElem>* output_node) override
+    void forwardHandler(const std::vector<NodeShPtr<TElem>>& input_nodes,
+                        Node<TElem>* output_node) override
     {
 
         auto input_0 = input_nodes[0]->values();
@@ -37,8 +37,8 @@ public:
         output_node->value(0) /= input_0.shapeFlattened(-1);
     }
 
-    void backwardHandler(const TNode<TElem>*             output_node,
-                         std::vector<TNodeShPtr<TElem>>& input_nodes) override
+    void backwardHandler(const Node<TElem>*             output_node,
+                         std::vector<NodeShPtr<TElem>>& input_nodes) override
     {
         auto  input_0  = input_nodes[0];
         auto  input_1  = input_nodes[1];
@@ -55,11 +55,11 @@ public:
 };
 
 template <class TElem>
-TNodeShPtr<TElem> MSE(const TNodeShPtr<TElem>& model_output,
-                      const TNodeShPtr<TElem>& correct)
+NodeShPtr<TElem> MSE(const NodeShPtr<TElem>& model_output,
+                     const NodeShPtr<TElem>& correct)
 {
-    return TConnector<TElem>::template apply<TMSEConnector>(model_output,
-                                                            correct);
+    return Connector<TElem>::template apply<MSEConnector>(model_output,
+                                                          correct);
 }
 
 } // namespace snnl
