@@ -4,6 +4,9 @@
 namespace snnl {
 
 template <class TElem>
+class Tensor;
+
+template <class TElem>
 class Connector;
 
 template <class TElem>

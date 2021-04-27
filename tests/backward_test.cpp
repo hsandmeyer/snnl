@@ -1,6 +1,4 @@
 #include "common_connectors.h"
-#include "connectors/connector_sigmoid.h"
-#include "connectors/connector_sum.h"
 #include "forward_declare.h"
 #include "module.h"
 #include "modules/module_dense.h"
@@ -12,9 +10,10 @@
 using namespace snnl;
 
 template <typename TElem>
-void compRel(TElem a, TElem b, TElem rel_prec)
+void compRel(TElem a, TElem b, TElem rel_prec, TElem abs_prec = 1e-10)
 {
-    if (std::abs(a - b) / (std::max(a, b)) > rel_prec) {
+    if (std::abs(a - b) / (std::max(a, b)) > rel_prec &&
+        std::abs(a - b) > abs_prec) {
         std::cout << double(a) << " " << double(b) << " " << std::endl;
         FAIL();
     }
@@ -222,6 +221,194 @@ TEST(BackwardTests, ComplexGraph)
             EXPECT_EQ(val, 0.f);
         }
     }
+}
+
+TEST(BackwardTests, BroadCastingAdd)
+{
+
+    struct BroadCastingModel : Module<double> {
+        NodeShPtr<double> weight_1;
+        NodeShPtr<double> weight_2;
+        NodeShPtr<double> weight_3;
+
+        BroadCastingModel()
+        {
+            weight_1 = this->addWeight({2, 2, 2});
+            weight_2 = this->addWeight({2, 2});
+            weight_3 = this->addWeight({2});
+        }
+
+        virtual NodeShPtr<double>
+        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        {
+            auto tmp = Add(inputs[0], weight_1);
+            tmp      = Add(weight_2, tmp);
+            tmp      = Add(tmp, weight_2);
+            tmp      = Add(tmp, weight_3);
+            tmp      = Add(weight_3, tmp);
+
+            return Sum(tmp);
+        }
+    };
+
+    BroadCastingModel model;
+
+    // Two inputs
+    NodeShPtr<double> input_1 = Node<double>::create({2, 2, 2});
+
+    input_1->values().uniform();
+
+    model.weight_1->values().uniform();
+    model.weight_2->values().uniform();
+    model.weight_3->values().uniform();
+
+    auto res = model.call(input_1);
+
+    res->computeGrad();
+    res->computeGrad();
+
+    test_grad(model, {input_1});
+}
+
+TEST(BackwardTests, BroadCastingMult)
+{
+
+    struct BroadCastingModel : Module<double> {
+        NodeShPtr<double> weight_1;
+        NodeShPtr<double> weight_2;
+        NodeShPtr<double> weight_3;
+
+        BroadCastingModel()
+        {
+            weight_1 = this->addWeight({2, 2, 2});
+            weight_2 = this->addWeight({2, 2});
+            weight_3 = this->addWeight({2});
+        }
+
+        virtual NodeShPtr<double>
+        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        {
+            auto tmp = Mult(inputs[0], weight_1);
+            tmp      = Mult(weight_2, tmp);
+            tmp      = Mult(tmp, weight_2);
+            tmp      = Mult(tmp, weight_3);
+            tmp      = Mult(weight_3, tmp);
+
+            return Sum(tmp);
+        }
+    };
+
+    BroadCastingModel model;
+
+    // Two inputs
+    NodeShPtr<double> input_1 = Node<double>::create({2, 2, 2});
+
+    input_1->values().uniform();
+
+    model.weight_1->values().uniform();
+    model.weight_2->values().uniform();
+    model.weight_3->values().uniform();
+
+    auto res = model.call(input_1);
+
+    res->computeGrad();
+    res->computeGrad();
+
+    test_grad(model, {input_1});
+}
+
+TEST(BackwardTests, BroadCastingSubtract)
+{
+
+    struct BroadCastingModel : Module<double> {
+        NodeShPtr<double> weight_1;
+        NodeShPtr<double> weight_2;
+        NodeShPtr<double> weight_3;
+
+        BroadCastingModel()
+        {
+            weight_1 = this->addWeight({2, 2, 2});
+            weight_2 = this->addWeight({2, 2});
+            weight_3 = this->addWeight({2});
+        }
+
+        virtual NodeShPtr<double>
+        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        {
+            auto tmp = Subtract(inputs[0], weight_1);
+            tmp      = Subtract(weight_2, tmp);
+            tmp      = Subtract(tmp, weight_2);
+            tmp      = Subtract(tmp, weight_3);
+            tmp      = Subtract(weight_3, tmp);
+
+            return Sum(tmp);
+        }
+    };
+
+    BroadCastingModel model;
+
+    // Two inputs
+    NodeShPtr<double> input_1 = Node<double>::create({2, 2, 2});
+
+    input_1->values().uniform();
+
+    model.weight_1->values().uniform();
+    model.weight_2->values().uniform();
+    model.weight_3->values().uniform();
+
+    auto res = model.call(input_1);
+
+    res->computeGrad();
+    res->computeGrad();
+
+    test_grad(model, {input_1});
+}
+
+TEST(BackwardTests, BroadCastingDivide)
+{
+
+    struct BroadCastingModel : Module<double> {
+        NodeShPtr<double> weight_1;
+        NodeShPtr<double> weight_2;
+        NodeShPtr<double> weight_3;
+
+        BroadCastingModel()
+        {
+            weight_1 = this->addWeight({2, 2, 2});
+            weight_2 = this->addWeight({2, 2});
+            weight_3 = this->addWeight({2});
+        }
+
+        virtual NodeShPtr<double>
+        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        {
+            auto tmp = Divide(inputs[0], weight_1);
+            tmp      = Divide(weight_2, tmp);
+            tmp      = Divide(tmp, weight_2);
+            tmp      = Divide(tmp, weight_3);
+            tmp      = Divide(weight_3, tmp);
+
+            return Sum(tmp);
+        }
+    };
+
+    BroadCastingModel model;
+
+    // Two inputs
+    NodeShPtr<double> input_1 = Node<double>::create({2, 2, 2});
+
+    input_1->values().uniform();
+
+    model.weight_1->values().uniform();
+    model.weight_2->values().uniform();
+    model.weight_3->values().uniform();
+
+    auto res = model.call(input_1);
+
+    res->computeGrad();
+    res->computeGrad();
+
+    test_grad(model, {input_1});
 }
 
 int main(int argc, char** argv)

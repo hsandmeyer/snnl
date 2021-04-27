@@ -407,6 +407,13 @@ TEST(ViewTest, ShrinkTest)
     t_view = t.shrinkToNDimsFromRight(2);
     EXPECT_EQ(t_view.shape(), Index({4, 2}));
 
+    t      = Tensor<int>({2, 2, 2});
+    t_view = t.shrinkToNDimsFromLeft(1);
+    EXPECT_EQ(t_view.shape(), Index({8}));
+
+    t_view = t.shrinkToNDimsFromRight(1);
+    EXPECT_EQ(t_view.shape(), Index({8}));
+
     t      = Tensor<int>({2, 2, 2, 2});
     t_view = t.shrinkToNDimsFromLeft(2);
     EXPECT_EQ(t_view.shape(), Index({2, 8}));
@@ -420,6 +427,133 @@ TEST(ViewTest, ShrinkTest)
 
     t_view = t.shrinkToNDimsFromLeft(3);
     EXPECT_EQ(t_view.shape(), Index({1, 1, 1}));
+
+    t = Tensor<int>({2, 2, 2});
+    EXPECT_THROW(t.shrinkToNDimsFromLeft(0), std::invalid_argument);
+    EXPECT_THROW(t.shrinkToNDimsFromRight(0), std::invalid_argument);
+}
+
+TEST(ViewTest, ShrinkToAxis)
+{
+    Tensor<int> t({2, 2});
+    Tensor<int> t_view = t.reshapeFromIndices({0});
+    EXPECT_EQ(t_view.shape(), Index({1, 4}));
+
+    t_view = t.reshapeFromIndices({1});
+    EXPECT_EQ(t_view.shape(), Index({2, 2}));
+
+    t_view = t.reshapeFromIndices({2});
+    EXPECT_EQ(t_view.shape(), Index({4, 1}));
+
+    t      = Tensor<int>({2, 2, 2});
+    t_view = t.reshapeFromIndices({1});
+    EXPECT_EQ(t_view.shape(), Index({2, 4}));
+
+    t_view = t.reshapeFromIndices({2});
+    EXPECT_EQ(t_view.shape(), Index({4, 2}));
+
+    t_view = t.reshapeFromIndices({-1, -2});
+    EXPECT_EQ(t_view.shape(), Index({2, 2, 2}));
+
+    t_view = t.reshapeFromIndices({0, 1});
+    EXPECT_EQ(t_view.shape(), Index({1, 2, 4}));
+
+    t_view = t.reshapeFromIndices({2, 3});
+    EXPECT_EQ(t_view.shape(), Index({4, 2, 1}));
+
+    t_view = t.reshapeFromIndices({1, 2, 2});
+    EXPECT_EQ(t_view.shape(), Index({2, 2, 1, 2}));
+
+    t      = Tensor<int>({2, 2, 2, 2});
+    t_view = t.reshapeFromIndices({0});
+    EXPECT_EQ(t_view.shape(), Index({1, 16}));
+
+    t_view = t.reshapeFromIndices({1});
+    EXPECT_EQ(t_view.shape(), Index({2, 8}));
+
+    t_view = t.reshapeFromIndices({2});
+    EXPECT_EQ(t_view.shape(), Index({4, 4}));
+
+    t_view = t.reshapeFromIndices({3});
+    EXPECT_EQ(t_view.shape(), Index({8, 2}));
+
+    t_view = t.reshapeFromIndices({4});
+    EXPECT_EQ(t_view.shape(), Index({16, 1}));
+
+    t_view = t.reshapeFromIndices({1, 2});
+    EXPECT_EQ(t_view.shape(), Index({2, 2, 4}));
+
+    t_view = t.reshapeFromIndices({0, 2});
+    EXPECT_EQ(t_view.shape(), Index({1, 4, 4}));
+
+    t_view = t.reshapeFromIndices({0, -2});
+    EXPECT_EQ(t_view.shape(), Index({1, 4, 4}));
+
+    t_view = t.reshapeFromIndices({-2, 0});
+    EXPECT_EQ(t_view.shape(), Index({1, 4, 4}));
+
+    t_view = t.reshapeFromIndices({1, 2, 2, 2});
+    EXPECT_EQ(t_view.shape(), Index({2, 2, 1, 1, 4}));
+}
+
+TEST(OperatorTest, BroadCasting)
+{
+    Tensor<int> a({2});
+    a.setFlattenedValues({2, 3});
+
+    Tensor<int> b({2, 2});
+    b.setFlattenedValues({1, 2, 3, 4});
+    Tensor tmp = b;
+
+    b *= a;
+    for (size_t i = 0; i < b.shape(0); ++i) {
+        for (size_t j = 0; j < b.shape(0); ++j) {
+            EXPECT_EQ(b(i, j), tmp(i, j) * a(j));
+        }
+    }
+
+    b.setFlattenedValues({1, 2, 3, 4});
+    Tensor<int> c({2, 2, 2});
+
+    c.setFlattenedValues({1, 2, 3, 4, 5, 6, 7, 8});
+    tmp = c;
+    c *= b;
+
+    for (size_t i = 0; i < b.shape(0); ++i) {
+        for (size_t j = 0; j < b.shape(0); ++j) {
+            for (size_t k = 0; k < b.shape(0); ++k) {
+                EXPECT_EQ(c(i, j, k), tmp(i, j, k) * b(j, k));
+            }
+        }
+    }
+
+    c.setFlattenedValues({1, 2, 3, 4, 5, 6, 7, 8});
+    c *= a;
+    for (size_t i = 0; i < b.shape(0); ++i) {
+        for (size_t j = 0; j < b.shape(0); ++j) {
+            for (size_t k = 0; k < b.shape(0); ++k) {
+                EXPECT_EQ(c(i, j, k), tmp(i, j, k) * a(k));
+            }
+        }
+    }
+
+    c = tmp * b;
+    for (size_t i = 0; i < b.shape(0); ++i) {
+        for (size_t j = 0; j < b.shape(0); ++j) {
+            for (size_t k = 0; k < b.shape(0); ++k) {
+                EXPECT_EQ(c(i, j, k), tmp(i, j, k) * b(j, k));
+            }
+        }
+    }
+
+    c = tmp * a;
+    for (size_t i = 0; i < b.shape(0); ++i) {
+        for (size_t j = 0; j < b.shape(0); ++j) {
+            for (size_t k = 0; k < b.shape(0); ++k) {
+                EXPECT_EQ(c(i, j, k), tmp(i, j, k) * a(k));
+            }
+        }
+    }
 }
 
 int main(int argc, char** argv)

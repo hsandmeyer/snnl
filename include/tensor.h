@@ -2,6 +2,7 @@
 #include "index.h"
 #include <array>
 #include <cstddef>
+#include <forward_declare.h>
 #include <functional>
 #include <initializer_list>
 #include <iostream>
@@ -13,6 +14,11 @@
 #include <vector>
 
 namespace snnl {
+
+template <typename TElemA, typename TElemB, typename Op>
+Tensor<TElemA> elementWiseCombination(const Tensor<TElemA>& a,
+                                      const Tensor<TElemB>& b, Op op);
+
 template <class TElem>
 class Tensor {
 
@@ -179,6 +185,37 @@ class Tensor {
         }
     }
 
+    size_t index(const Index& index_vec) const
+    {
+#ifdef DEBUG
+        if (index_vec.size() > _NDims) {
+            throw std::out_of_range(
+                "Number of inidizes exceeds number of dimension");
+        }
+#endif
+        size_t index = 0;
+        // Backwards, because we allow less indexes than NDims.
+        // We start from the right
+        for (size_t i = _strides.NDims(); i-- > 0;) {
+            index += index_vec[i] * _strides[i];
+        }
+        return index;
+    }
+
+    template <typename... T>
+    void numIndicesCheck(T...) const
+    {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wtype-limits"
+        // For empty parameter stacks, this is always false (as intended). We
+        // have to disable the warning here
+        if (sizeof...(T) > _NDims) {
+            throw std::out_of_range(
+                "Number of inidizes exceeds number of dimension");
+        }
+#pragma GCC diagnostic pop
+    }
+
 public:
     typedef typename std::vector<TElem>::iterator       iterator;
     typedef typename std::vector<TElem>::const_iterator const_iterator;
@@ -227,37 +264,111 @@ public:
         return *this;
     }
 
-    void forEach(std::function<void(const Index&)> func)
+    auto begin() { return _data->begin(); }
+
+    auto end() { return _data->end(); }
+
+    auto begin() const { return _data->begin(); }
+
+    auto end() const { return _data->end(); }
+
+    int NDims() const { return _NDims; }
+
+    Index& shape() { return _shape; }
+
+    const Index& shape() const { return _shape; }
+
+    size_t shape(int i) const
     {
-        Index index(NDims());
-        forEach(index, 0, func);
+        if (i < 0) {
+            i += NDims();
+        }
+
+#ifdef DEBUG
+
+        if (i < 0 || i >= static_cast<int>(_shape.size())) {
+            throw std::out_of_range(std::string(
+                "Shape: Index " + std::to_string(i) + " is out of range"));
+        }
+#endif
+
+        return _shape[i];
     }
 
-    void modifyForEach(std::function<TElem(const Index&)> func)
+    size_t shapeFlattened(int i) const
     {
-        Index index(NDims());
-        forEach(index, 0, func);
+        if (i < 0) {
+            i += NDims();
+        }
+
+        if (i >= NDims() || i < 0) {
+            throw std::out_of_range("shapeFlattened Axis " + std::to_string(i) +
+                                    " is out of range");
+        }
+
+        return NElems() / stride(i);
     }
 
-    void arangeAlongAxis(int axis, TElem start, TElem stop)
+    size_t stride(int i) const
     {
-        if (axis < 0) {
-            axis += NDims();
+        if (i < 0) {
+            i += NDims();
         }
+#ifdef DEBUG
 
-        TElem step = 0;
-
-        if (_NDims != 0) {
-            step = (stop - start) / static_cast<TElem>(shape(axis));
+        if (i < 0 || i >= static_cast<int>(_strides.size())) {
+            throw std::out_of_range(std::string(
+                "stride: Index " + std::to_string(i) + " is out of range"));
         }
-        else {
-            (*_data)[0] = start;
-            return;
-        }
+#endif
+        return _strides[i];
+    }
 
-        modifyForEach([&](const Index& index) -> TElem {
-            return start + index[axis] * step;
-        });
+    bool isScalar() { return _NDims == 0; }
+
+    size_t NElems() const
+    {
+        if (_NDims == 0) {
+            return 1;
+        }
+        return _strides[0] * _shape[0];
+    }
+
+    template <typename... T>
+    TElem& operator()(T... indexes)
+    {
+#ifdef DEBUG
+        numIndicesCheck(indexes...);
+        return _data->at(dataOffset(indexes...));
+#else
+        return (*_data)[dataOffset(indexes...)];
+#endif
+    }
+
+    template <typename... T>
+    const TElem& operator()(T... indexes) const
+    {
+#ifdef DEBUG
+        numIndicesCheck(indexes...);
+        return _data->at(dataOffset(indexes...));
+#else
+        return (*_data)[dataOffset(indexes...)];
+#endif
+    }
+
+    const TElem& operator()(const Index& index_vec) const
+    {
+        return const_cast<TElem&>(
+            (*const_cast<Tensor<TElem>*>(this))(index_vec));
+    }
+
+    TElem& operator()(const Index& index_vec)
+    {
+#ifdef DEBUG
+        return (*_data)[index(index_vec)];
+#else
+        return _data->at(index(index_vec));
+#endif
     }
 
     template <typename TArray>
@@ -323,136 +434,90 @@ public:
         return out;
     }
 
-    int NDims() const { return _NDims; }
-
-    bool isScalar() { return _NDims == 0; }
-
-    size_t NElems() const
+    Tensor<TElem> reshapeFromIndices(std::initializer_list<long> list)
     {
-        if (_NDims == 0) {
-            return 1;
-        }
-        return _strides[0] * _shape[0];
+        return reshapeFromIndices(std::vector<long>(list.begin(), list.end()));
     }
 
-    size_t shapeFlattened(int i) const
+    /*
+    Flatten some of the dimensions of the tensor: Pass an array of axis
+    indexes. These axes as well as the first are preserved. The remaining axes
+    are flattened into the next valid axis to the left. If axes inidices are
+    repeated, a new axis with length one is inserted to the left. If an axis
+    index is 0, a new axis of length 1 is inserted at the front. If an axis
+    index is larger or equal NDims, a new axes of length 1 is inserted at the
+    end. e.g.
+
+    Tensor<int> t({2, 2, 2});
+    Tensor<int> t_view = t.flattenAtAxisPositions({1});
+    t_view.shape(); //{2, 4}
+
+    t_view = t.flattenAtAxisPositions({2});
+    t_view.shape(); //{4, 2}
+
+    t_view = t.flattenAtAxisPositions({1,2});
+    t_view.shape(); //{2, 2, 2}
+
+    t_view = t.flattenAtAxisPositions({0,1});
+    t_view.shape(); //{1, 2, 4}
+
+    t_view = t.flattenAtAxisPositions({2,3});
+    t_view.shape(); //{4, 2, 1}
+
+    t_view = t.flattenAtAxisPositions({1, 2, 2});
+    t_view.shape(); //{2, 2, 1, 2}
+    */
+    template <typename TArray>
+    Tensor<TElem> reshapeFromIndices(TArray axes)
     {
-        if (i < 0) {
-            i += NDims();
+        for (auto& axis : axes) {
+            if (axis < 0) {
+                axis += NDims();
+            }
+        }
+        std::sort(axes.begin(), axes.end());
+
+        Index sizeView(axes.size() + 1);
+
+        long currentAxis = 0;
+        for (size_t i = 0; i < axes.size(); i++) {
+            sizeView[i] = 1;
+
+            long end = 0;
+            if (axes[i] >= 0 && axes[i] < NDims()) {
+                end = axes[i];
+            }
+            else if (axes[i] >= NDims()) {
+                end = NDims();
+            }
+            for (; currentAxis < end; currentAxis++) {
+                sizeView[i] *= shape(currentAxis);
+            }
+        }
+        sizeView[-1] = 1;
+        for (; currentAxis < NDims(); currentAxis++) {
+            sizeView[-1] *= shape(currentAxis);
         }
 
-        if (i >= NDims() || i < 0) {
-            throw std::out_of_range("shapeFlattened Axis " + std::to_string(i) +
-                                    " is out of range");
-        }
-
-        return NElems() / stride(i);
+        return viewAs(sizeView);
     }
 
-    template <typename... T>
-    void numIndicesCheck(T...) const
+    template <typename TArray>
+    Tensor<TElem> reshapeFromIndices(TArray arr) const
     {
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wtype-limits"
-        // For empty parameter stacks, this is always false (as intended). We
-        // have to disable the warning here
-        if (sizeof...(T) > _NDims) {
-            throw std::out_of_range(
-                "Number of inidizes exceeds number of dimension");
-        }
-#pragma GCC diagnostic pop
+        return const_cast<Tensor<TElem>*>(this)->reshapeFromIndices(arr);
     }
 
-    template <typename... T>
-    TElem& operator()(T... indices)
+    Tensor<TElem> reshapeFromIndices(std::initializer_list<long> list) const
     {
-#ifdef DEBUG
-        numIndicesCheck(indices...);
-        return _data->at(dataOffset(indices...));
-#else
-        return (*_data)[dataOffset(indices...)];
-#endif
+        return const_cast<Tensor<TElem>*>(this)->reshapeFromIndices(list);
     }
-
-    template <typename... T>
-    const TElem& operator()(T... indices) const
-    {
-#ifdef DEBUG
-        numIndicesCheck(indices...);
-        return _data->at(dataOffset(indices...));
-#else
-        return (*_data)[dataOffset(indices...)];
-#endif
-    }
-
-    const TElem& operator()(const Index& index_vec) const
-    {
-        return const_cast<TElem&>(
-            (*const_cast<Tensor<TElem>*>(this))(index_vec));
-    }
-
-    TElem& operator()(const Index& index_vec)
-    {
-#ifdef DEBUG
-        return (*_data)[index(index_vec)];
-#else
-        return _data->at(index(index_vec));
-#endif
-    }
-
-    size_t index(const Index& index_vec) const
-    {
-#ifdef DEBUG
-        if (index_vec.size() > _NDims) {
-            throw std::out_of_range(
-                "Number of inidizes exceeds number of dimension");
-        }
-#endif
-        size_t index = 0;
-        for (size_t i = 0; i < static_cast<size_t>(NDims()); ++i) {
-            index += index_vec[i] * _strides[i];
-        }
-        return index;
-    }
-
-    size_t shape(int i) const
-    {
-        if (i < 0) {
-            i += NDims();
-        }
-
-#ifdef DEBUG
-
-        if (i < 0 || i >= static_cast<int>(_shape.size())) {
-            throw std::out_of_range(std::string(
-                "Shape: Index " + std::to_string(i) + " is out of range"));
-        }
-#endif
-
-        return _shape[i];
-    }
-
-    size_t stride(int i) const
-    {
-        if (i < 0) {
-            i += NDims();
-        }
-#ifdef DEBUG
-
-        if (i < 0 || i >= static_cast<int>(_strides.size())) {
-            throw std::out_of_range(std::string(
-                "stride: Index " + std::to_string(i) + " is out of range"));
-        }
-#endif
-        return _strides[i];
-    }
-
-    Index& shape() { return _shape; }
-
-    const Index& shape() const { return _shape; }
 
     Tensor<TElem> shrinkToNDimsFromRight(const size_t NDims)
     {
+        if (NDims == 0) {
+            throw std::invalid_argument("Shrinking to scalar ist not allowed");
+        }
         Index newShape(NDims);
         long  shape_ind = 0;
 
@@ -474,6 +539,9 @@ public:
 
     Tensor<TElem> shrinkToNDimsFromLeft(const size_t NDims)
     {
+        if (NDims == 0) {
+            throw std::invalid_argument("Shrinking to scalar ist not allowed");
+        }
         Index  newShape(NDims);
         size_t shape_ind = 0;
 
@@ -497,14 +565,55 @@ public:
         return viewAs(newShape);
     }
 
+    Tensor<TElem> shrinkToNDimsFromLeft(const size_t NDims) const
+    {
+        return const_cast<Tensor<TElem>*>(this)->shrinkToNDimsFromLeft(NDims);
+    }
+
+    Tensor<TElem> shrinkToNDimsFromRight(const size_t NDims) const
+    {
+        return const_cast<Tensor<TElem>*>(this)->shrinkToNDimsFromRight(NDims);
+    }
+
+    void forEach(std::function<void(const Index&)> func)
+    {
+        Index index(NDims());
+        forEach(index, 0, func);
+    }
+
+    void modifyForEach(std::function<TElem(const Index&)> func)
+    {
+        Index index(NDims());
+        forEach(index, 0, func);
+    }
+
+    void arangeAlongAxis(int axis, TElem start, TElem stop)
+    {
+        if (axis < 0) {
+            axis += NDims();
+        }
+
+        TElem step = 0;
+
+        if (_NDims != 0) {
+            step = (stop - start) / static_cast<TElem>(shape(axis));
+        }
+        else {
+            (*_data)[0] = start;
+            return;
+        }
+
+        modifyForEach([&](const Index& index) -> TElem {
+            return start + index[axis] * step;
+        });
+    }
+
+    void setAllValues(TElem value) { std::fill(begin(), end(), value); }
+
     void setFlattenedValues(std::initializer_list<TElem> flattened_values)
     {
-        if (flattened_values.size() != _data->size()) {
-            throw std::invalid_argument(
-                "Flattened array does not match data size");
-        }
-        std::copy(flattened_values.begin(), flattened_values.end(),
-                  _data->begin());
+        return setFlattenedValues(std::vector<TElem>(flattened_values.begin(),
+                                                     flattened_values.end()));
     }
 
     template <typename TArray>
@@ -517,8 +626,6 @@ public:
         std::copy(flattened_values.begin(), flattened_values.end(),
                   _data->begin());
     }
-
-    void setAllValues(TElem value) { std::fill(begin(), end(), value); }
 
     void normal(TElem mean = 0, TElem stddev = 1)
     {
@@ -544,49 +651,33 @@ public:
         uniform(xav_min, xav_max);
     }
 
-    auto begin() { return _data->begin(); }
-
-    auto end() { return _data->end(); }
-
-    auto begin() const { return _data->begin(); }
-
-    auto end() const { return _data->end(); }
-
-    template <typename TElemOther>
-    Tensor& operator*=(const Tensor<TElemOther>& other)
+    /*Elementwise modification in place using operation defined by op. If
+    other.NDims() is smaller, than NDims(), broadcasting
+    takes place. Otherwise the dimension has to match exactly*/
+    template <typename TElemOther, typename Op>
+    Tensor& elementWiseModification(const Tensor<TElemOther>& other, Op op)
     {
-        if (other._shape != _shape) {
-            throw std::invalid_argument("Operatr *=: Size missmatch");
+        if (other.NDims() > NDims()) {
+            throw std::invalid_argument(
+                "Operatr *=: Cannot multiply with tensor of higher dimension");
         }
-        auto otherInd = other.begin();
-        for (auto& val : *this) {
-            val *= *otherInd++;
+        for (long i = 1; i <= other.NDims(); i++) {
+            if (shape(-i) != other.shape(-i)) {
+                throw std::invalid_argument(
+                    "Operatr *=: Dimension mismatch. Shape at " +
+                    std::to_string(-i) +
+                    " is unequal: " + std::to_string(shape(-i)) + " vs " +
+                    std::to_string(other.shape(-i)));
+            }
         }
-        return *this;
-    }
 
-    template <typename TElemOther>
-    Tensor& operator-=(const Tensor<TElemOther>& other)
-    {
-        if (other._shape != _shape) {
-            throw std::invalid_argument("Operatr *=: Size missmatch");
-        }
-        auto otherInd = other.begin();
-        for (auto& val : *this) {
-            val -= *otherInd++;
-        }
-        return *this;
-    }
+        Tensor<TElem> this_view  = reshapeFromIndices({-other.NDims()});
+        Tensor<TElem> other_view = other.shrinkToNDimsFromLeft(1);
 
-    template <typename TElemOther>
-    Tensor& operator/=(const Tensor<TElemOther>& other)
-    {
-        if (other._shape != _shape) {
-            throw std::invalid_argument("Operatr *=: Size missmatch");
-        }
-        auto otherInd = other.begin();
-        for (auto& val : *this) {
-            val /= *otherInd++;
+        for (size_t i = 0; i < this_view.shape(0); i++) {
+            for (size_t j = 0; j < this_view.shape(1); j++) {
+                this_view(i, j) = op(this_view(i, j), other_view(j));
+            }
         }
         return *this;
     }
@@ -594,50 +685,105 @@ public:
     template <typename TElemOther>
     Tensor& operator+=(const Tensor<TElemOther>& other)
     {
-        if (other._shape != _shape) {
-            throw std::invalid_argument("Operatr *=: Size missmatch");
-        }
-        auto otherInd = other.begin();
-        for (auto& val : *this) {
-            val += *otherInd++;
-        }
-        return *this;
+        return elementWiseModification(
+            other, [](TElem a, TElemOther b) { return a + b; });
+    }
+
+    template <typename TElemOther>
+    Tensor& operator-=(const Tensor<TElemOther>& other)
+    {
+        return elementWiseModification(
+            other, [](TElem a, TElemOther b) { return a - b; });
+    }
+
+    template <typename TElemOther>
+    Tensor& operator*=(const Tensor<TElemOther>& other)
+    {
+        return elementWiseModification(
+            other, [](TElem a, TElemOther b) { return a * b; });
+    }
+
+    template <typename TElemOther>
+    Tensor& operator/=(const Tensor<TElemOther>& other)
+    {
+        return elementWiseModification(
+            other, [](TElem a, TElemOther b) { return a / b; });
     }
 
     template <typename TElemB>
     friend Tensor<TElem> operator+(const Tensor<TElem>&  a,
                                    const Tensor<TElemB>& b)
     {
-        Tensor<TElem> out(a);
-        out += b;
-        return out;
+        return elementWiseCombination(a, b,
+                                      [](TElem a, TElemB b) { return a + b; });
     }
 
     template <typename TElemB>
     friend Tensor<TElem> operator-(const Tensor<TElem>&  a,
                                    const Tensor<TElemB>& b)
     {
-        Tensor<TElem> out(a);
-        out -= b;
-        return out;
+        return elementWiseCombination(a, b,
+                                      [](TElem a, TElemB b) { return a - b; });
     }
 
     template <typename TElemB>
     friend Tensor<TElem> operator*(const Tensor<TElem>&  a,
                                    const Tensor<TElemB>& b)
     {
-        Tensor<TElem> out(a);
-        out *= b;
-        return out;
+        return elementWiseCombination(a, b,
+                                      [](TElem a, TElemB b) { return a * b; });
     }
 
     template <typename TElemB>
     friend Tensor<TElem> operator/(const Tensor<TElem>&  a,
                                    const Tensor<TElemB>& b)
     {
-        Tensor<TElem> out(a);
-        out /= b;
-        return out;
+        return elementWiseCombination(a, b,
+                                      [](TElem a, TElemB b) { return a / b; });
     }
 };
+
+template <typename TElemA, typename TElemB, typename Op>
+Tensor<TElemA> elementWiseCombination(const Tensor<TElemA>& a,
+                                      const Tensor<TElemB>& b, Op op)
+{
+    long NDims_smaller = std::min(a.NDims(), b.NDims());
+    for (long i = 1; i <= NDims_smaller; i++) {
+        if (a.shape(-i) != b.shape(-i)) {
+            throw std::invalid_argument(
+                "Operatr *=: Dimension mismatch. Shape at " +
+                std::to_string(-i) +
+                " is unequal: " + std::to_string(a.shape(-i)) + " vs " +
+                std::to_string(b.shape(-i)));
+        }
+    }
+
+    if (a.NDims() > b.NDims()) {
+        Tensor<TElemA> out(a.shape());
+        Tensor<TElemA> out_view = out.reshapeFromIndices({-b.NDims()});
+        Tensor<TElemA> a_view   = a.reshapeFromIndices({-b.NDims()});
+        Tensor<TElemB> b_view   = b.shrinkToNDimsFromLeft(1);
+
+        for (size_t i = 0; i < a_view.shape(0); i++) {
+            for (size_t j = 0; j < a_view.shape(1); j++) {
+                out_view(i, j) = op(a_view(i, j), b_view(j));
+            }
+        }
+        return out;
+    }
+    else {
+        Tensor<TElemA> out(b.shape());
+        Tensor<TElemA> out_view = out.reshapeFromIndices({-a.NDims()});
+        Tensor<TElemB> b_view   = b.reshapeFromIndices({-a.NDims()});
+        Tensor<TElemA> a_view   = a.shrinkToNDimsFromLeft(1);
+
+        for (size_t i = 0; i < b_view.shape(0); i++) {
+            for (size_t j = 0; j < b_view.shape(1); j++) {
+                out_view(i, j) = op(a_view(j), b_view(i, j));
+            }
+        }
+        return out;
+    }
+}
+
 } // namespace snnl
