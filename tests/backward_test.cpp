@@ -44,7 +44,7 @@ void test_node_grad(Node<double>& node, Module<double>& model,
 
         double grad = node.grad(index);
 
-        compRel(double(numerical_grad), double(grad), 1e-5);
+        compRel(double(numerical_grad), double(grad), 1e-4);
     });
 }
 
@@ -396,6 +396,103 @@ TEST(BackwardTests, BroadCastingDivide)
 
     // Two inputs
     NodeShPtr<double> input_1 = Node<double>::create({2, 2, 2});
+
+    input_1->values().uniform();
+
+    model.weight_1->values().uniform();
+    model.weight_2->values().uniform();
+    model.weight_3->values().uniform();
+
+    auto res = model.call(input_1);
+
+    res->computeGrad();
+    res->computeGrad();
+
+    test_grad(model, {input_1});
+}
+
+TEST(BackwardTests, Dot1)
+{
+
+    struct DotModel : Module<double> {
+        NodeShPtr<double> weight_1;
+        NodeShPtr<double> weight_2;
+        NodeShPtr<double> weight_3;
+        NodeShPtr<double> weight_4;
+        NodeShPtr<double> weight_5;
+
+        DotModel()
+        {
+            weight_1 = this->addWeight({3, 2, 3, 2});
+            weight_2 = this->addWeight({4, 3, 2});
+            weight_3 = this->addWeight({2, 4});
+            weight_4 = this->addWeight({4});
+            weight_5 = this->addWeight({});
+        }
+
+        virtual NodeShPtr<double>
+        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        {
+            auto tmp = Dot(weight_1, inputs[0]);
+            tmp      = Dot(tmp, weight_2);
+            tmp      = Dot(tmp, weight_3);
+            tmp      = Dot(tmp, weight_4);
+            tmp      = Dot(tmp, weight_5);
+            tmp      = Dot(weight_5, tmp);
+
+            return Sum(tmp);
+        }
+    };
+
+    DotModel model;
+
+    NodeShPtr<double> input_1 = Node<double>::create({2, 2, 3});
+
+    input_1->values().uniform();
+
+    model.weight_1->values().uniform();
+    model.weight_2->values().uniform();
+    model.weight_3->values().uniform();
+    model.weight_4->values().uniform();
+    model.weight_5->values().uniform();
+
+    auto res = model.call(input_1);
+
+    res->computeGrad();
+    res->computeGrad();
+
+    test_grad(model, {input_1});
+}
+
+TEST(BackwardTests, Dot2)
+{
+
+    struct DotModel : Module<double> {
+        NodeShPtr<double> weight_1;
+        NodeShPtr<double> weight_2;
+        NodeShPtr<double> weight_3;
+
+        DotModel()
+        {
+            weight_1 = this->addWeight({2, 2});
+            weight_2 = this->addWeight({2});
+            weight_3 = this->addWeight({});
+        }
+
+        virtual NodeShPtr<double>
+        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        {
+            auto tmp = Dot(weight_1, inputs[0]);
+            tmp      = Dot(tmp, weight_2);
+            tmp      = Dot(tmp, weight_3);
+            tmp      = Dot(weight_3, tmp);
+            tmp      = Dot(weight_3, weight_3);
+            return tmp;
+        }
+    };
+    DotModel model;
+
+    NodeShPtr<double> input_1 = Node<double>::create({2});
 
     input_1->values().uniform();
 

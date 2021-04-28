@@ -6,6 +6,15 @@
 
 using namespace snnl;
 
+void compareTensor(Tensor<float>& a, Tensor<float>& b)
+{
+    auto it = b.begin();
+    for (float& val : a) {
+        EXPECT_FLOAT_EQ(val, *it);
+        it++;
+    }
+}
+
 class OneDenseConnectorTest
     : public ::testing::TestWithParam<std::vector<size_t>> {
 };
@@ -152,6 +161,145 @@ TEST(ComplexGraph, complex_graph)
 
     // For check of correct result: See check.py
     EXPECT_FLOAT_EQ(res->value(), 8.360636886487102);
+}
+
+TEST(DotTest, MatrixTimesMatrix)
+{
+    NodeShPtr<float> a = Node<float>::create({2, 3});
+    a->values().setFlattenedValues({1, 2, 3, 4, 5, 6});
+
+    NodeShPtr<float> b = Node<float>::create({3, 2});
+    b->values().setFlattenedValues({11, 12, 13, 14, 15, 16});
+
+    Tensor<float> ref({2, 2});
+    ref.setFlattenedValues(
+        {8.200000e+01, 8.800000e+01, 1.990000e+02, 2.140000e+02});
+
+    compareTensor(Dot(a, b)->values(), ref);
+
+    ref = Tensor<float>({3, 3});
+    ref.setFlattenedValues({5.900000e+01, 8.200000e+01, 1.050000e+02,
+                            6.900000e+01, 9.600000e+01, 1.230000e+02,
+                            7.900000e+01, 1.100000e+02, 1.410000e+02});
+    compareTensor(Dot(b, a)->values(), ref);
+}
+
+TEST(DotTest, TensorTimesTensor)
+{
+    NodeShPtr<float> a = Node<float>::create({2, 2, 3});
+    a->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 2, 14);
+
+    NodeShPtr<float> b = Node<float>::create({3, 3, 2});
+    b->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 5, 23);
+
+    Tensor<float> ref({2, 2, 3, 2});
+    ref.setFlattenedValues(
+        {6.700000e+01, 7.600000e+01, 1.210000e+02, 1.300000e+02, 1.750000e+02,
+         1.840000e+02, 1.300000e+02, 1.480000e+02, 2.380000e+02, 2.560000e+02,
+         3.460000e+02, 3.640000e+02, 1.930000e+02, 2.200000e+02, 3.550000e+02,
+         3.820000e+02, 5.170000e+02, 5.440000e+02, 2.560000e+02, 2.920000e+02,
+         4.720000e+02, 5.080000e+02, 6.880000e+02, 7.240000e+02});
+
+    compareTensor(Dot(a, b)->values(), ref);
+
+    ref = Tensor<float>({3, 3, 2, 3});
+    ref.setFlattenedValues(
+        {4.000000e+01, 5.100000e+01, 6.200000e+01, 1.060000e+02, 1.170000e+02,
+         1.280000e+02, 5.400000e+01, 6.900000e+01, 8.400000e+01, 1.440000e+02,
+         1.590000e+02, 1.740000e+02, 6.800000e+01, 8.700000e+01, 1.060000e+02,
+         1.820000e+02, 2.010000e+02, 2.200000e+02, 8.200000e+01, 1.050000e+02,
+         1.280000e+02, 2.200000e+02, 2.430000e+02, 2.660000e+02, 9.600000e+01,
+         1.230000e+02, 1.500000e+02, 2.580000e+02, 2.850000e+02, 3.120000e+02,
+         1.100000e+02, 1.410000e+02, 1.720000e+02, 2.960000e+02, 3.270000e+02,
+         3.580000e+02, 1.240000e+02, 1.590000e+02, 1.940000e+02, 3.340000e+02,
+         3.690000e+02, 4.040000e+02, 1.380000e+02, 1.770000e+02, 2.160000e+02,
+         3.720000e+02, 4.110000e+02, 4.500000e+02, 1.520000e+02, 1.950000e+02,
+         2.380000e+02, 4.100000e+02, 4.530000e+02, 4.960000e+02});
+
+    compareTensor(Dot(b, a)->values(), ref);
+}
+
+TEST(DotTest, TensorTimesTemsor2)
+{
+    NodeShPtr<float> a = Node<float>::create({2, 3});
+    a->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 2, 8);
+
+    NodeShPtr<float> b = Node<float>::create({3, 3, 2});
+    b->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 5, 23);
+
+    Tensor<float> ref({2, 3, 2});
+    ref.setFlattenedValues({6.700000e+01, 7.600000e+01, 1.210000e+02,
+                            1.300000e+02, 1.750000e+02, 1.840000e+02,
+                            1.300000e+02, 1.480000e+02, 2.380000e+02,
+                            2.560000e+02, 3.460000e+02, 3.640000e+02});
+
+    compareTensor(Dot(a, b)->values(), ref);
+
+    ref = Tensor<float>({3, 3, 3});
+    ref.setFlattenedValues(
+        {4.000000e+01, 5.100000e+01, 6.200000e+01, 5.400000e+01, 6.900000e+01,
+         8.400000e+01, 6.800000e+01, 8.700000e+01, 1.060000e+02, 8.200000e+01,
+         1.050000e+02, 1.280000e+02, 9.600000e+01, 1.230000e+02, 1.500000e+02,
+         1.100000e+02, 1.410000e+02, 1.720000e+02, 1.240000e+02, 1.590000e+02,
+         1.940000e+02, 1.380000e+02, 1.770000e+02, 2.160000e+02, 1.520000e+02,
+         1.950000e+02, 2.380000e+02});
+    compareTensor(Dot(b, a)->values(), ref);
+}
+
+TEST(DotTest, InnerProduct)
+{
+    NodeShPtr<float> a = Node<float>::create({2});
+    a->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 2, 4);
+
+    NodeShPtr<float> b = Node<float>::create({2});
+    b->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 5, 7);
+
+    EXPECT_FLOAT_EQ(Dot(a, b)->value(), 28.f);
+    EXPECT_FLOAT_EQ(Dot(b, a)->value(), 28.f);
+}
+
+TEST(DotTest, MatrixTimesVector)
+{
+    NodeShPtr<float> a = Node<float>::create({2, 2});
+    a->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 2, 6);
+
+    NodeShPtr<float> b = Node<float>::create({2});
+    b->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 5, 7);
+
+    Tensor<float> ref({2});
+    ref.setFlattenedValues({28, 50});
+    compareTensor(Dot(a, b)->values(), ref);
+
+    ref.setFlattenedValues({34, 45});
+    compareTensor(Dot(b, a)->values(), ref);
+}
+
+TEST(DotTest, ScalarTimesVector)
+{
+    NodeShPtr<float> a = Node<float>::create();
+    a->value()         = 3;
+    std::cout << a->values() << std::endl;
+
+    NodeShPtr<float> b = Node<float>::create({2});
+    b->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 5, 7);
+
+    Tensor<float> ref({2});
+    ref.setFlattenedValues({15, 18});
+
+    compareTensor(Dot(a, b)->values(), ref);
+    compareTensor(Dot(b, a)->values(), ref);
+}
+
+TEST(DotTest, ScalarTimesScalar)
+{
+    NodeShPtr<float> a = Node<float>::create();
+    a->value()         = 3;
+
+    NodeShPtr<float> b = Node<float>::create();
+    b->value()         = 2;
+
+    EXPECT_FLOAT_EQ(Dot(a, b)->value(), 6);
+    EXPECT_FLOAT_EQ(Dot(b, a)->value(), 6);
 }
 
 int main(int argc, char** argv)

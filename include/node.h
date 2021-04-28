@@ -175,6 +175,8 @@ public:
 
     Index& shape() { return _values.shape(); }
 
+    bool isScalar() const { return _values.isScalar(); }
+
     const Index& shape() const { return _values.shape(); }
 
     template <typename TArray>

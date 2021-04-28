@@ -324,7 +324,7 @@ public:
         return _strides[i];
     }
 
-    bool isScalar() { return _NDims == 0; }
+    bool isScalar() const { return _NDims == 0; }
 
     size_t NElems() const
     {
@@ -405,9 +405,18 @@ public:
         fillStrides(false);
     }
 
+    Tensor<TElem> view() { return viewAs(_shape); }
+
+    Tensor<TElem> view() const { return viewAs(_shape); }
+
     Tensor<TElem> viewAs(std::initializer_list<size_t> shape)
     {
         return viewAs(std::vector<size_t>(shape.begin(), shape.end()));
+    }
+
+    Tensor<TElem> viewAs(std::initializer_list<size_t> shape) const
+    {
+        return const_cast<Tensor<TElem>*>(this)->viewAs(shape);
     }
 
     template <typename TArray>
@@ -432,6 +441,12 @@ public:
             }
         }
         return out;
+    }
+
+    template <typename TArray>
+    Tensor<TElem> viewAs(const TArray& arr) const
+    {
+        return const_cast<Tensor<TElem>*>(this)->viewAs(arr);
     }
 
     Tensor<TElem> reshapeFromIndices(std::initializer_list<long> list)
