@@ -33,5 +33,13 @@
             },
             "command": "cmake -DCMAKE_BUILD_TYPE=Debug ${workspaceRoot}; make sin",
         },
+        {
+            "label": "make_example_sinRnn",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceRoot}/build"
+            },
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug ${workspaceRoot}; make sinRnn",
+        },
     ]
 }

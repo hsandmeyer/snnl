@@ -23,10 +23,6 @@ class DotConnector : public Connector<TElem> {
         size_t output_units;
         if (a->NDims() > 1) {
             // Matrix
-            output_units = a->shape(-2);
-        }
-        else if (a->NDims() > 0) {
-            // 1D vector
             output_units = a->shape(-1);
         }
         else {
@@ -35,7 +31,12 @@ class DotConnector : public Connector<TElem> {
         }
 
         size_t input_units;
-        if (b->NDims() >= 1) {
+        if (b->NDims() > 1) {
+            // Matrix
+            input_units = b->shape(-2);
+        }
+        else if (b->NDims() > 0) {
+            // Vector
             input_units = b->shape(-1);
         }
         else {
@@ -155,7 +156,7 @@ class DotConnector : public Connector<TElem> {
         auto& grad_b = input_nodes.at(1)->gradient();
 
         if (a.isScalar() && !b.isScalar()) {
-            // scalar times vector
+            // scalar times vector/matrix
             for (size_t i = 0; i < output_grad.shapeFlattened(-1); i++) {
                 grad_a() += b(i) * output_grad(i);
                 grad_b(i) += a() * output_grad(i);
@@ -164,7 +165,7 @@ class DotConnector : public Connector<TElem> {
         }
 
         if (b.isScalar() && !a.isScalar()) {
-            // vector times scalar
+            // vector times scalar/matrix
             for (size_t i = 0; i < output_grad.shapeFlattened(-1); i++) {
                 grad_a(i) += b() * output_grad(i);
                 grad_b() += a(i) * output_grad(i);
@@ -176,6 +177,7 @@ class DotConnector : public Connector<TElem> {
             // scalar times scalar
             grad_a() += b() * output_grad();
             grad_b() += a() * output_grad();
+            return;
         }
 
         auto a_view      = a.view();

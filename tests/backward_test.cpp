@@ -55,6 +55,8 @@ void test_grad(Module<double>& model, std::vector<NodeShPtr<double>> inputs)
         [&](Node<double>& weight) { test_node_grad(weight, model, inputs); });
 }
 
+/*
+
 class LinearConnectorTest
     : public ::testing::TestWithParam<std::vector<size_t>> {
 };
@@ -463,6 +465,7 @@ TEST(BackwardTests, Dot1)
 
     test_grad(model, {input_1});
 }
+*/
 
 TEST(BackwardTests, Dot2)
 {
@@ -484,10 +487,9 @@ TEST(BackwardTests, Dot2)
         {
             auto tmp = Dot(weight_1, inputs[0]);
             tmp      = Dot(tmp, weight_2);
-            tmp      = Dot(tmp, weight_3);
             tmp      = Dot(weight_3, tmp);
-            tmp      = Dot(weight_3, weight_3);
-            return tmp;
+            tmp      = Dot(tmp, weight_3);
+            return Sum(tmp);
         }
     };
     DotModel model;
