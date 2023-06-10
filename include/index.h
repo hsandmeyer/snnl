@@ -1,14 +1,17 @@
 #pragma once
+#include <cstdint>
 #include <initializer_list>
+#include <iostream>
 #include <ostream>
+#include <stdexcept>
 #include <vector>
 
-class Index {
+class Index
+{
     std::vector<size_t> _shape;
 
 public:
-    template <typename Integer,
-              std::enable_if_t<std::is_unsigned<Integer>::value, int> = 0>
+    template<typename Integer, std::enable_if_t<std::is_unsigned<Integer>::value, int> = 0>
     size_t& operator[](Integer i)
     {
 #ifdef DEBUG
@@ -18,25 +21,23 @@ public:
 #endif
     }
 
-    template <typename Integer,
-              std::enable_if_t<std::is_signed<Integer>::value, int> = 0>
+    template<typename Integer, std::enable_if_t<std::is_signed<Integer>::value, int> = 0>
     size_t& operator[](Integer i)
     {
 #ifdef DEBUG
-        if (i < 0) {
+        if(i < 0) {
             return _shape.at(_shape.size() + i);
         }
         return _shape.at(i);
 #else
-        if (i < 0) {
+        if(i < 0) {
             return _shape[_shape.size() + i];
         }
         return _shape[i];
 #endif
     }
 
-    template <typename Integer,
-              std::enable_if_t<std::is_unsigned<Integer>::value, int> = 0>
+    template<typename Integer, std::enable_if_t<std::is_unsigned<Integer>::value, int> = 0>
     const size_t& operator[](Integer i) const
     {
 #ifdef DEBUG
@@ -46,26 +47,31 @@ public:
 #endif
     }
 
-    template <typename Integer,
-              std::enable_if_t<std::is_signed<Integer>::value, int> = 0>
+    template<typename Integer, std::enable_if_t<std::is_signed<Integer>::value, int> = 0>
     const size_t& operator[](Integer i) const
     {
 #ifdef DEBUG
-        if (i < 0) {
+        if(i < 0) {
             return _shape.at(_shape.size() + i);
         }
         return _shape.at(i);
 #else
-        if (i < 0) {
+        if(i < 0) {
             return _shape[_shape.size() + i];
         }
         return _shape[i];
 #endif
     }
 
-    Index(std::initializer_list<size_t> list) : _shape(list) {}
+    Index(std::initializer_list<size_t> list)
+        : _shape(list)
+    {
+    }
 
-    Index(size_t size) : _shape(size) {}
+    Index(size_t size)
+        : _shape(size)
+    {
+    }
 
     Index() = default;
 
@@ -114,13 +120,69 @@ public:
     friend std::ostream& operator<<(std::ostream& o, Index ind)
     {
         o << "{";
-        for (size_t i = 0; i < ind._shape.size(); i++) {
+        for(size_t i = 0; i < ind._shape.size(); i++) {
             o << ind[i];
-            if (i < ind.size() - 1) {
+            if(i < ind.size() - 1) {
                 o << ", ";
             }
         }
         o << "}";
         return o;
+    }
+
+    std::vector<uint8_t> toByteArray() const
+    {
+        std::vector<uint8_t> out;
+        size_t               size = _shape.size();
+        out.reserve(_shape.size() * sizeof(size_t) + sizeof(size));
+
+        const uint8_t* ptr = reinterpret_cast<uint8_t*>(&size);
+
+        for(size_t i = 0; i < sizeof(size); i++) {
+            out.push_back(ptr[i]);
+        }
+
+        if(size > 0) {
+            ptr = reinterpret_cast<const uint8_t*>(&_shape[0]);
+
+            for(size_t i = 0; i < sizeof(size_t) * size; i++) {
+                out.push_back(ptr[i]);
+            }
+        }
+        return out;
+    }
+
+    size_t fromByteArray(const std::vector<uint8_t>& array)
+    {
+        return fromByteArray(array.begin(), array.end());
+    }
+
+    template<typename Iterator>
+    size_t fromByteArray(Iterator begin, Iterator end)
+    {
+        size_t array_size = begin - end;
+
+        if(array_size < sizeof(size_t)) {
+            throw std::range_error("Index: fromByteArray - invalid array size)");
+        }
+
+        const size_t NElems = *(reinterpret_cast<const size_t*>(&*begin));
+        _shape.resize(NElems);
+        const size_t* ptr;
+
+        if(NElems > 0) {
+
+            if((array_size - sizeof(size_t)) / sizeof(size_t) < _shape.size()) {
+                throw std::range_error("Index: fromByteArray - invalid array size)");
+            }
+
+            begin += sizeof(size_t);
+            ptr = reinterpret_cast<const size_t*>(&*begin);
+
+            for(size_t i = 0; i < NElems; i++) {
+                _shape[i] = ptr[i];
+            }
+        }
+        return sizeof(size_t) + NElems * sizeof(size_t);
     }
 };

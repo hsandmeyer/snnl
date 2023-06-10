@@ -2,17 +2,18 @@
 #include "forward_declare.h"
 #include "module.h"
 
-namespace snnl {
+namespace snnl
+{
 
-template <typename TElem>
-class Optimizer {
+template<typename TElem>
+class Optimizer
+{
 
     int _num_states_per_weight;
 
     std::map<NodeShPtr<TElem>, std::vector<Tensor<TElem>>> _states;
 
-    virtual void optimizeGrad(Node<TElem>&                weight,
-                              std::vector<Tensor<TElem>>& states) = 0;
+    virtual void optimizeGrad(Node<TElem>& weight, std::vector<Tensor<TElem>>& states) = 0;
 
 public:
     Optimizer(int num_states_per_weight)
@@ -27,9 +28,9 @@ public:
 
             auto& states = _states[weight_ptr];
 
-            if (states.empty()) {
+            if(states.empty()) {
                 states.resize(_num_states_per_weight);
-                for (auto& t : states) {
+                for(auto& t : states) {
                     t.setDims(weight.shape());
                     t.setAllValues(0);
                 }
@@ -40,23 +41,23 @@ public:
     }
 };
 
-template <typename TElem>
-class SGDOptimizer : public Optimizer<TElem> {
+template<typename TElem>
+class SGDOptimizer : public Optimizer<TElem>
+{
 
     TElem _learning_rate;
 
-    virtual void optimizeGrad(Node<TElem>& weight,
-                              std::vector<Tensor<TElem>>&) override
+    virtual void optimizeGrad(Node<TElem>& weight, std::vector<Tensor<TElem>>&) override
     {
-        for (size_t ind = 0; ind < weight.shapeFlattened(-1); ind++) {
-            weight.value(ind) =
-                weight.value(ind) - _learning_rate * weight.grad(ind);
+        for(size_t ind = 0; ind < weight.shapeFlattened(-1); ind++) {
+            weight.value(ind) = weight.value(ind) - _learning_rate * weight.grad(ind);
         }
     }
 
 public:
     SGDOptimizer(TElem learning_rate)
-        : Optimizer<TElem>::Optimizer(0), _learning_rate(learning_rate)
+        : Optimizer<TElem>::Optimizer(0)
+        , _learning_rate(learning_rate)
     {
     }
 };

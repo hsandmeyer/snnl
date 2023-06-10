@@ -6,10 +6,12 @@
 #include <stdexcept>
 #include <unordered_set>
 
-namespace snnl {
+namespace snnl
+{
 
-template <class TElem>
-class Node : public std::enable_shared_from_this<Node<TElem>> {
+template<class TElem>
+class Node : public std::enable_shared_from_this<Node<TElem>>
+{
 
     friend class Connector<TElem>;
     friend class Connector<TElem>;
@@ -21,7 +23,7 @@ class Node : public std::enable_shared_from_this<Node<TElem>> {
 
     ConnectorShPtr<TElem> _prev_connector = nullptr;
 
-    // Extra variabels for tracking the backward call.
+    // Extra variables for tracking the backward call.
     // Connected nodes from the last forward call
     std::unordered_set<Node<TElem>*> _connected_nodes = {};
     bool                             _needs_grad      = false;
@@ -32,58 +34,56 @@ class Node : public std::enable_shared_from_this<Node<TElem>> {
     void collectNodesInternal(std::unordered_set<NodeShPtr<TElem>>& nodes)
     {
         nodes.emplace(getPtr());
-        if (_prev_connector) {
+        if(_prev_connector) {
             _prev_connector->collectNodesInternal(this, nodes);
         }
     }
 
     void collectWeightsInternal(std::unordered_set<NodeShPtr<TElem>>& weights)
     {
-        if (_prev_connector) {
+        if(_prev_connector) {
             _prev_connector->collectWeightsInternal(this, weights);
         }
     }
 
-    void collectConnectorsInternal(
-        std::unordered_set<ConnectorShPtr<TElem>>& connetors)
+    void collectConnectorsInternal(std::unordered_set<ConnectorShPtr<TElem>>& connetors)
     {
-        if (_prev_connector) {
+        if(_prev_connector) {
             _prev_connector->collectNodesInternal(this, connetors);
         }
     }
 
 public:
-    template <typename... TArgs>
+    template<typename... TArgs>
     static ::std::shared_ptr<Node> create(TArgs&&... args)
     {
         return ::std::shared_ptr<Node>(new Node(std::forward<TArgs>(args)...));
     }
 
-    static ::std::shared_ptr<Node>
-    create(const std::initializer_list<size_t> shape)
+    static ::std::shared_ptr<Node> create(const std::initializer_list<size_t> shape)
     {
         return ::std::shared_ptr<Node>(new Node(shape));
     }
 
-    template <typename... Args>
+    template<typename... Args>
     TElem& value(const Args... args)
     {
         return _values(args...);
     }
 
-    template <typename... Args>
+    template<typename... Args>
     const TElem& value(const Args... args) const
     {
         return _values(args...);
     }
 
-    template <typename... Args>
+    template<typename... Args>
     const TElem& grad(const Args... args) const
     {
         return _gradient(args...);
     }
 
-    template <typename... Args>
+    template<typename... Args>
     TElem& grad(const Args... args)
     {
         return _gradient(args...);
@@ -101,27 +101,29 @@ public:
 
     void computeGrad()
     {
-        countConnectedNodesBackwards();
+        needsGradAbove();
 
         _gradient.setAllValues(1);
 
-        if (_prev_connector) {
+        if(_prev_connector) {
             _prev_connector->backward(this);
         }
     }
 
     void zeroGrad()
     {
-        iterateNodes(
-            [](Node<TElem>& node) { node.gradient().setAllValues(0); });
-        iterateWeights(
-            [](Node<TElem>& weight) { weight.gradient().setAllValues(0); });
+        iterateNodes([](Node<TElem>& node) {
+            node.gradient().setAllValues(0);
+        });
+        iterateWeights([](Node<TElem>& weight) {
+            weight.gradient().setAllValues(0);
+        });
     }
 
     void iterateConnectors(std::function<void(Connector<TElem>&)> func)
     {
         auto all_connectors = collectConnectors();
-        for (auto& conn : all_connectors) {
+        for(auto& conn : all_connectors) {
             func(*conn);
         }
     }
@@ -129,7 +131,7 @@ public:
     void iterateNodes(std::function<void(Node<TElem>&)> func)
     {
         auto all_nodes = collectNodes();
-        for (auto& node : all_nodes) {
+        for(auto& node : all_nodes) {
             func(*node);
         }
     }
@@ -137,7 +139,7 @@ public:
     void iterateWeights(std::function<void(Node<TElem>&)> func)
     {
         auto all_weights = collectWeights();
-        for (auto& weight : all_weights) {
+        for(auto& weight : all_weights) {
             func(*weight);
         }
     }
@@ -179,7 +181,7 @@ public:
 
     const Index& shape() const { return _values.shape(); }
 
-    template <typename TArray>
+    template<typename TArray>
     void setDims(const TArray& arr)
     {
         _values.setDims(arr);
@@ -202,7 +204,7 @@ public:
 
     void disconnect()
     {
-        if (_prev_connector) {
+        if(_prev_connector) {
             _prev_connector->disconnect(this);
             _prev_connector = nullptr;
         }
@@ -215,8 +217,9 @@ protected:
 
     const Node& operator=(const Node&) = delete;
 
-    template <typename TArray>
-    Node(const TArray& shape, bool is_weight = false) : _is_weight(is_weight)
+    template<typename TArray>
+    Node(const TArray& shape, bool is_weight = false)
+        : _is_weight(is_weight)
     {
         setDims(shape);
     }
@@ -229,8 +232,8 @@ protected:
     void backward()
     {
         _backward_calls++;
-        if (_prev_connector) {
-            if (_backward_calls == _connected_nodes.size()) {
+        if(_prev_connector) {
+            if(_backward_calls == _connected_nodes.size()) {
                 _prev_connector->backward(this);
                 _backward_calls = 0;
                 _connected_nodes.clear();
@@ -242,14 +245,14 @@ protected:
         }
     }
 
-    bool countConnectedNodesBackwards(Node<TElem>* next_node = nullptr)
+    bool needsGradAbove(Node<TElem>* next_node = nullptr)
     {
-        if (next_node) {
-            if (_connected_nodes.find(next_node) != _connected_nodes.end()) {
+        if(next_node) {
+            if(_connected_nodes.find(next_node) != _connected_nodes.end()) {
                 // Already came along this edge. Stop here
                 return _needs_grad;
             }
-            if (_connected_nodes.empty()) {
+            if(_connected_nodes.empty()) {
                 _gradient.setAllValues(static_cast<TElem>(0));
             }
             _connected_nodes.emplace(next_node);
@@ -257,8 +260,8 @@ protected:
 
         bool needs_grad = _is_weight;
 
-        if (_prev_connector) {
-            needs_grad |= _prev_connector->countConnectedNodesBackwards(this);
+        if(_prev_connector) {
+            needs_grad |= _prev_connector->needsGradAbove(this);
         }
 
         _needs_grad = needs_grad;
@@ -267,12 +270,11 @@ protected:
 
     void connectPrevConnector(ConnectorShPtr<TElem>& prev)
     {
-        if (prev.get() == _prev_connector.get()) {
+        if(prev.get() == _prev_connector.get()) {
             return;
         }
-        if (_prev_connector) {
-            throw std::invalid_argument(
-                "Node already connected to a previous connector");
+        if(_prev_connector) {
+            throw std::invalid_argument("Node already connected to a previous connector");
         }
         _prev_connector = prev;
     }

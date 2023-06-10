@@ -1,7 +1,11 @@
 #pragma once
+#include "connectors/connector_avpooling.h"
 #include "connectors/connector_combine.h"
+#include "connectors/connector_concatenate.h"
+#include "connectors/connector_conv2d.h"
 #include "connectors/connector_dense.h"
 #include "connectors/connector_dot.h"
 #include "connectors/connector_functions.h"
 #include "connectors/connector_mse.h"
 #include "connectors/connector_sum.h"
+#include "connectors/connector_upscaling.h"

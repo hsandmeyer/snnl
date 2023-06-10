@@ -16,11 +16,9 @@ void compareTensor(Tensor<float>& a, Tensor<float>& b)
 }
 
 class OneDenseConnectorTest
-    : public ::testing::TestWithParam<std::vector<size_t>> {
-};
+    : public ::testing::TestWithParam<std::vector<size_t>> {};
 class MultiDenseConnectorTest
-    : public ::testing::TestWithParam<std::vector<size_t>> {
-};
+    : public ::testing::TestWithParam<std::vector<size_t>> {};
 
 TEST_P(OneDenseConnectorTest, input_shape)
 {

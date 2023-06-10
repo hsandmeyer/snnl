@@ -1,12 +1,29 @@
-ColumnLimit: 80
-IndentWidth: 4
 AccessModifierOffset: -4
-BreakBeforeBraces: Stroustrup
 AlignConsecutiveAssignments: true
-AlignEscapedNewlines: Right
 AlignConsecutiveDeclarations: true
-AlwaysBreakTemplateDeclarations: true
-DerivePointerBinding: false
-PointerBindsToType: false
-DerivePointerAlignment: false
+AlignEscapedNewlines: Right
+AllowShortFunctionsOnASingleLine: InlineOnly
+# AllowShortIfStatementsOnASingleLine: false
+AllowShortLambdasOnASingleLine: Empty
+AlwaysBreakTemplateDeclarations: Yes
+BraceWrapping:
+    AfterCaseLabel: true
+    AfterClass: true
+    AfterControlStatement: MultiLine
+    AfterEnum: true
+    AfterExternBlock: true
+    AfterFunction: true
+    AfterNamespace: true
+    AfterStruct: true
+    AfterUnion: true
+    BeforeCatch: true
+    BeforeElse: true
+    SplitEmptyRecord: false
+BreakBeforeBraces: Custom
+BreakConstructorInitializers: BeforeComma
+ColumnLimit: 100
+IndentCaseLabels: true
+IndentWidth: 4
 PointerAlignment: Left
+SpaceAfterTemplateKeyword: false
+SpaceBeforeParens: Never 

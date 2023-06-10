@@ -36,12 +36,13 @@ struct SinRNNModel : public Module<float> {
 
 int main()
 {
-    size_t           batch_size = 16;
+    size_t           batch_size = 4;
     NodeShPtr<float> step       = Node<float>::create({batch_size, 1});
     NodeShPtr<float> x          = Node<float>::create({batch_size, 1});
     NodeShPtr<float> input      = Node<float>::create({batch_size, 2});
 
     NodeShPtr<float> sin = Node<float>::create({batch_size, 1});
+    sin                  = Sin(x);
 
     SinRNNModel model;
 
@@ -52,10 +53,7 @@ int main()
 
         x = Add(x, step);
 
-        for (size_t i = 0; i < batch_size; i++) {
-            input->value(i, 0) = step->value(i, 0);
-            input->value(i, 1) = sin->value(i, 0);
-        }
+        input = Concatenate(step, sin, 1);
 
         NodeShPtr<float> out = model.call(input);
 
@@ -69,14 +67,11 @@ int main()
         optimizer.optimizeStep(loss);
 
         if (i % 500 == 0) {
-            // std::cout << model.dense1->B()->values();
-
             std::cout << "Loss = " << loss->value(0) << std::endl;
             std::cout << "Diff =\n"
                       << out->values() - sin->values() << " " << std::endl;
 
-            NodeShPtr<float> x_fut = Node<float>::create({batch_size, 1});
-            x_fut->values().setAllValues(0);
+            auto x_fut = x;
 
             std::ofstream fout("test.txt");
             model.preserveState();
@@ -84,17 +79,14 @@ int main()
             for (size_t future = 0; future < 100; future++) {
                 step->values().uniform(0.5, 1.5);
                 x_fut = Add(x_fut, step);
-                x     = Add(x, step);
 
-                for (size_t i = 0; i < batch_size; i++) {
-                    input->value(i, 0) = step->value(i, 0);
-                    input->value(i, 1) = out->value(i, 0);
-                }
-                sin = Sin(x);
+                input = Concatenate(step, sin, 1);
+
+                sin = Sin(x_fut);
                 out = model.call(input);
 
                 for (size_t batch = 0; batch < batch_size; batch++) {
-                    fout << x_fut->value(batch, 0) << " "
+                    fout << Subtract(x_fut, x)->value(batch, 0) << " "
                          << out->value(batch, 0) << " " << sin->value(batch, 0)
                          << " ";
                 }

@@ -1,6 +1,7 @@
 #include "common_connectors.h"
 #include "forward_declare.h"
 #include "module.h"
+#include "modules/module_conv2d.h"
 #include "modules/module_dense.h"
 #include "node.h"
 #include <gtest/gtest-param-test.h>
@@ -55,11 +56,8 @@ void test_grad(Module<double>& model, std::vector<NodeShPtr<double>> inputs)
         [&](Node<double>& weight) { test_node_grad(weight, model, inputs); });
 }
 
-/*
-
 class LinearConnectorTest
-    : public ::testing::TestWithParam<std::vector<size_t>> {
-};
+    : public ::testing::TestWithParam<std::vector<size_t>> {};
 
 TEST_P(LinearConnectorTest, input_shape)
 {
@@ -189,7 +187,7 @@ TEST(BackwardTests, ComplexGraph)
             auto tmp_1_4 = Add(tmp_1_3, tmp_1_0);
 
             // combine two inputs
-            auto combined = Add(tmp_1_4, tmp_2_0);
+            auto combined = Concatenate(tmp_1_4, tmp_2_0, 1);
 
             // Sum batches
             return Sum(combined);
@@ -465,7 +463,6 @@ TEST(BackwardTests, Dot1)
 
     test_grad(model, {input_1});
 }
-*/
 
 TEST(BackwardTests, Dot2)
 {
@@ -508,6 +505,59 @@ TEST(BackwardTests, Dot2)
     res->computeGrad();
 
     test_grad(model, {input_1});
+}
+
+TEST(ImageTest, ImageTest)
+{
+    struct ImageModel : public Module<double> {
+
+        std::shared_ptr<Conv2DModule<double>> conv2d_1;
+        std::shared_ptr<Conv2DModule<double>> conv2d_2;
+
+        ImageModel()
+        {
+            conv2d_1 = this->addModule<Conv2DModule>(5, 3, 3, 8);
+            conv2d_2 = this->addModule<Conv2DModule>(3, 1, 8, 1);
+        }
+
+        virtual NodeShPtr<double>
+        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        {
+            // std::cout << "Input " << inputs.at(0)->values() << std::endl;
+            NodeShPtr<double> tmp = conv2d_1->call(inputs.at(0));
+            // std::cout << "Conv2d " << tmp->values() << std::endl;
+            tmp = Sigmoid(tmp);
+            // std::cout << "Sigmoid " << tmp->values() << std::endl;
+            tmp = AveragePooling(tmp, 4, 2);
+            // std::cout << "Average " << tmp->values() << std::endl;
+            tmp = Upscale2D(tmp, 2, 4);
+            // std::cout << "Upscale " << tmp->values() << std::endl;
+            tmp = conv2d_2->call(tmp);
+            // std::cout << "conv " << tmp->values() << std::endl;
+            return Sum(tmp);
+        }
+    };
+
+    ImageModel model;
+
+    NodeShPtr<double> input_1 = Node<double>::create({10, 8, 3});
+
+    input_1->values().uniform();
+
+    auto res = model.call(input_1);
+
+    res->computeGrad();
+    res->computeGrad();
+
+    test_grad(model, {input_1});
+
+    NodeShPtr<double> input_2 = Node<double>::create({9, 8, 3});
+    input_2->values().uniform();
+
+    res = model.call(input_1);
+
+    res->computeGrad();
+    test_grad(model, {input_2});
 }
 
 int main(int argc, char** argv)

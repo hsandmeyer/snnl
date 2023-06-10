@@ -6,8 +6,7 @@
 
 using namespace snnl;
 
-class Tensor1DTest : public ::testing::TestWithParam<size_t> {
-};
+class Tensor1DTest : public ::testing::TestWithParam<size_t> {};
 
 TEST(Tensor0DTest, scalar)
 {
@@ -57,8 +56,7 @@ TEST_P(Tensor1DTest, size)
 }
 
 class Tensor2DTest
-    : public ::testing::TestWithParam<std::pair<size_t, size_t>> {
-};
+    : public ::testing::TestWithParam<std::pair<size_t, size_t>> {};
 
 TEST_P(Tensor2DTest, size)
 {
@@ -86,8 +84,7 @@ TEST_P(Tensor2DTest, size)
     }
 }
 
-class Tensor3DTest : public ::testing::TestWithParam<std::array<size_t, 3>> {
-};
+class Tensor3DTest : public ::testing::TestWithParam<std::array<size_t, 3>> {};
 
 TEST_P(Tensor3DTest, size)
 {
@@ -144,8 +141,7 @@ TEST_P(Tensor3DTest, size)
     }
 }
 
-class Tensor4DTest : public ::testing::TestWithParam<std::array<size_t, 4>> {
-};
+class Tensor4DTest : public ::testing::TestWithParam<std::array<size_t, 4>> {};
 
 TEST_P(Tensor4DTest, size)
 {
@@ -554,6 +550,29 @@ TEST(OperatorTest, BroadCasting)
             }
         }
     }
+}
+
+TEST(InputOutputTest, ToByteTest)
+{
+    Tensor<float> a({2, 7, 3});
+    a.uniform();
+
+    auto          array = a.toByteArray();
+    Tensor<float> b;
+    b.fromByteArray(array);
+
+    EXPECT_EQ(a.shape(), b.shape());
+    for (size_t i = 0; i < a.size(); i++) {
+        EXPECT_EQ(a(i), b(i));
+    }
+
+    a = Tensor<float>();
+    a.uniform();
+    array = a.toByteArray();
+    b.fromByteArray(array);
+
+    EXPECT_EQ(a.shape(), b.shape());
+    EXPECT_EQ(a(), b());
 }
 
 int main(int argc, char** argv)
