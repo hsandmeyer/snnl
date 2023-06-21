@@ -9,16 +9,16 @@ using namespace snnl;
 void compareTensor(Tensor<float>& a, Tensor<float>& b)
 {
     auto it = b.begin();
-    for (float& val : a) {
+    for(float& val : a) {
         EXPECT_FLOAT_EQ(val, *it);
-        it++;
+        ++it;
     }
 }
 
-class OneDenseConnectorTest
-    : public ::testing::TestWithParam<std::vector<size_t>> {};
-class MultiDenseConnectorTest
-    : public ::testing::TestWithParam<std::vector<size_t>> {};
+class OneDenseConnectorTest : public ::testing::TestWithParam<std::vector<size_t>>
+{};
+class MultiDenseConnectorTest : public ::testing::TestWithParam<std::vector<size_t>>
+{};
 
 TEST_P(OneDenseConnectorTest, input_shape)
 {
@@ -28,16 +28,14 @@ TEST_P(OneDenseConnectorTest, input_shape)
 
     input->values().arangeAlongAxis(-1, 0, input->values().shape(-1) * 2);
 
-    DenseModuleShPtr<float> encode =
-        Module<float>::create<DenseModule>(shape.back(), 32ul);
+    DenseModuleShPtr<float> encode = Module<float>::create<DenseModule>(shape.back(), 32ul);
 
     auto weights = encode->W();
     auto bias    = encode->B();
 
     weights->setAllValues(0);
 
-    for (size_t i = 0; i < std::min(weights->shape(0), weights->shape(1));
-         i++) {
+    for(size_t i = 0; i < std::min(weights->shape(0), weights->shape(1)); i++) {
         weights->value(i, i) = 1;
     }
 
@@ -46,7 +44,7 @@ TEST_P(OneDenseConnectorTest, input_shape)
     NodeShPtr<float> out = encode->call(input);
 
     out->values().forEach([&](const Index& index) {
-        if (!this->HasFatalFailure()) {
+        if(!this->HasFatalFailure()) {
             ASSERT_FLOAT_EQ(out->value(index), 1 + 2 * index[-1]);
         }
     });
@@ -56,11 +54,9 @@ TEST_P(MultiDenseConnectorTest, input_shape)
 {
     auto shape = GetParam();
 
-    NodeShPtr<float>        input = Node<float>::create(shape);
-    DenseModuleShPtr<float> encode =
-        Module<float>::create<DenseModule>(shape.back(), 32ul);
-    DenseModuleShPtr<float> decode =
-        Module<float>::create<DenseModule>(32ul, 128ul);
+    NodeShPtr<float>        input  = Node<float>::create(shape);
+    DenseModuleShPtr<float> encode = Module<float>::create<DenseModule>(shape.back(), 32ul);
+    DenseModuleShPtr<float> decode = Module<float>::create<DenseModule>(32ul, 128ul);
 
     input->values().setAllValues(1);
 
@@ -74,24 +70,20 @@ TEST_P(MultiDenseConnectorTest, input_shape)
     out                  = decode->call(out);
 
     out->values().forEach([&](const Index& index) {
-        if (!this->HasFatalFailure()) {
-            ASSERT_FLOAT_EQ(
-                decode->W()->shape(1) * (encode->W()->shape(1) + 1) + 1,
-                out->value(index));
+        if(!this->HasFatalFailure()) {
+            ASSERT_FLOAT_EQ(decode->W()->shape(1) * (encode->W()->shape(1) + 1) + 1,
+                            out->value(index));
         }
     });
 }
 
 INSTANTIATE_TEST_SUITE_P(OneDenseConnectorTestAllTests, OneDenseConnectorTest,
-                         ::testing::Values(std::vector<size_t>{128},
-                                           std::vector<size_t>{32, 128},
+                         ::testing::Values(std::vector<size_t>{128}, std::vector<size_t>{32, 128},
                                            std::vector<size_t>{128, 128},
                                            std::vector<size_t>{32, 128, 32}));
 
-INSTANTIATE_TEST_SUITE_P(MultiDenseConnectorTestAllTests,
-                         MultiDenseConnectorTest,
-                         ::testing::Values(std::vector<size_t>{128},
-                                           std::vector<size_t>{32, 128},
+INSTANTIATE_TEST_SUITE_P(MultiDenseConnectorTestAllTests, MultiDenseConnectorTest,
+                         ::testing::Values(std::vector<size_t>{128}, std::vector<size_t>{32, 128},
                                            std::vector<size_t>{128, 128},
                                            std::vector<size_t>{32, 128, 32}));
 
@@ -118,8 +110,7 @@ TEST(ComplexGraph, complex_graph)
 
     auto dense_1 = Module<float>::create<DenseModule>(2, 2);
 
-    ConnectorShPtr<float> sigmoid =
-        Connector<float>::create<SigmoidConnector>();
+    ConnectorShPtr<float> sigmoid = Connector<float>::create<SigmoidConnector>();
 
     ConnectorShPtr<float> add = Connector<float>::create<AddConnector>();
     ConnectorShPtr<float> sum = Connector<float>::create<SumConnector>();
@@ -170,15 +161,13 @@ TEST(DotTest, MatrixTimesMatrix)
     b->values().setFlattenedValues({11, 12, 13, 14, 15, 16});
 
     Tensor<float> ref({2, 2});
-    ref.setFlattenedValues(
-        {8.200000e+01, 8.800000e+01, 1.990000e+02, 2.140000e+02});
+    ref.setFlattenedValues({8.200000e+01, 8.800000e+01, 1.990000e+02, 2.140000e+02});
 
     compareTensor(Dot(a, b)->values(), ref);
 
     ref = Tensor<float>({3, 3});
-    ref.setFlattenedValues({5.900000e+01, 8.200000e+01, 1.050000e+02,
-                            6.900000e+01, 9.600000e+01, 1.230000e+02,
-                            7.900000e+01, 1.100000e+02, 1.410000e+02});
+    ref.setFlattenedValues({5.900000e+01, 8.200000e+01, 1.050000e+02, 6.900000e+01, 9.600000e+01,
+                            1.230000e+02, 7.900000e+01, 1.100000e+02, 1.410000e+02});
     compareTensor(Dot(b, a)->values(), ref);
 }
 
@@ -191,28 +180,25 @@ TEST(DotTest, TensorTimesTensor)
     b->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 5, 23);
 
     Tensor<float> ref({2, 2, 3, 2});
-    ref.setFlattenedValues(
-        {6.700000e+01, 7.600000e+01, 1.210000e+02, 1.300000e+02, 1.750000e+02,
-         1.840000e+02, 1.300000e+02, 1.480000e+02, 2.380000e+02, 2.560000e+02,
-         3.460000e+02, 3.640000e+02, 1.930000e+02, 2.200000e+02, 3.550000e+02,
-         3.820000e+02, 5.170000e+02, 5.440000e+02, 2.560000e+02, 2.920000e+02,
-         4.720000e+02, 5.080000e+02, 6.880000e+02, 7.240000e+02});
+    ref.setFlattenedValues({6.700000e+01, 7.600000e+01, 1.210000e+02, 1.300000e+02, 1.750000e+02,
+                            1.840000e+02, 1.300000e+02, 1.480000e+02, 2.380000e+02, 2.560000e+02,
+                            3.460000e+02, 3.640000e+02, 1.930000e+02, 2.200000e+02, 3.550000e+02,
+                            3.820000e+02, 5.170000e+02, 5.440000e+02, 2.560000e+02, 2.920000e+02,
+                            4.720000e+02, 5.080000e+02, 6.880000e+02, 7.240000e+02});
 
     compareTensor(Dot(a, b)->values(), ref);
 
     ref = Tensor<float>({3, 3, 2, 3});
     ref.setFlattenedValues(
-        {4.000000e+01, 5.100000e+01, 6.200000e+01, 1.060000e+02, 1.170000e+02,
-         1.280000e+02, 5.400000e+01, 6.900000e+01, 8.400000e+01, 1.440000e+02,
-         1.590000e+02, 1.740000e+02, 6.800000e+01, 8.700000e+01, 1.060000e+02,
-         1.820000e+02, 2.010000e+02, 2.200000e+02, 8.200000e+01, 1.050000e+02,
-         1.280000e+02, 2.200000e+02, 2.430000e+02, 2.660000e+02, 9.600000e+01,
-         1.230000e+02, 1.500000e+02, 2.580000e+02, 2.850000e+02, 3.120000e+02,
-         1.100000e+02, 1.410000e+02, 1.720000e+02, 2.960000e+02, 3.270000e+02,
-         3.580000e+02, 1.240000e+02, 1.590000e+02, 1.940000e+02, 3.340000e+02,
-         3.690000e+02, 4.040000e+02, 1.380000e+02, 1.770000e+02, 2.160000e+02,
-         3.720000e+02, 4.110000e+02, 4.500000e+02, 1.520000e+02, 1.950000e+02,
-         2.380000e+02, 4.100000e+02, 4.530000e+02, 4.960000e+02});
+        {4.000000e+01, 5.100000e+01, 6.200000e+01, 1.060000e+02, 1.170000e+02, 1.280000e+02,
+         5.400000e+01, 6.900000e+01, 8.400000e+01, 1.440000e+02, 1.590000e+02, 1.740000e+02,
+         6.800000e+01, 8.700000e+01, 1.060000e+02, 1.820000e+02, 2.010000e+02, 2.200000e+02,
+         8.200000e+01, 1.050000e+02, 1.280000e+02, 2.200000e+02, 2.430000e+02, 2.660000e+02,
+         9.600000e+01, 1.230000e+02, 1.500000e+02, 2.580000e+02, 2.850000e+02, 3.120000e+02,
+         1.100000e+02, 1.410000e+02, 1.720000e+02, 2.960000e+02, 3.270000e+02, 3.580000e+02,
+         1.240000e+02, 1.590000e+02, 1.940000e+02, 3.340000e+02, 3.690000e+02, 4.040000e+02,
+         1.380000e+02, 1.770000e+02, 2.160000e+02, 3.720000e+02, 4.110000e+02, 4.500000e+02,
+         1.520000e+02, 1.950000e+02, 2.380000e+02, 4.100000e+02, 4.530000e+02, 4.960000e+02});
 
     compareTensor(Dot(b, a)->values(), ref);
 }
@@ -226,21 +212,19 @@ TEST(DotTest, TensorTimesTemsor2)
     b->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 5, 23);
 
     Tensor<float> ref({2, 3, 2});
-    ref.setFlattenedValues({6.700000e+01, 7.600000e+01, 1.210000e+02,
-                            1.300000e+02, 1.750000e+02, 1.840000e+02,
-                            1.300000e+02, 1.480000e+02, 2.380000e+02,
-                            2.560000e+02, 3.460000e+02, 3.640000e+02});
+    ref.setFlattenedValues({6.700000e+01, 7.600000e+01, 1.210000e+02, 1.300000e+02, 1.750000e+02,
+                            1.840000e+02, 1.300000e+02, 1.480000e+02, 2.380000e+02, 2.560000e+02,
+                            3.460000e+02, 3.640000e+02});
 
     compareTensor(Dot(a, b)->values(), ref);
 
     ref = Tensor<float>({3, 3, 3});
-    ref.setFlattenedValues(
-        {4.000000e+01, 5.100000e+01, 6.200000e+01, 5.400000e+01, 6.900000e+01,
-         8.400000e+01, 6.800000e+01, 8.700000e+01, 1.060000e+02, 8.200000e+01,
-         1.050000e+02, 1.280000e+02, 9.600000e+01, 1.230000e+02, 1.500000e+02,
-         1.100000e+02, 1.410000e+02, 1.720000e+02, 1.240000e+02, 1.590000e+02,
-         1.940000e+02, 1.380000e+02, 1.770000e+02, 2.160000e+02, 1.520000e+02,
-         1.950000e+02, 2.380000e+02});
+    ref.setFlattenedValues({4.000000e+01, 5.100000e+01, 6.200000e+01, 5.400000e+01, 6.900000e+01,
+                            8.400000e+01, 6.800000e+01, 8.700000e+01, 1.060000e+02, 8.200000e+01,
+                            1.050000e+02, 1.280000e+02, 9.600000e+01, 1.230000e+02, 1.500000e+02,
+                            1.100000e+02, 1.410000e+02, 1.720000e+02, 1.240000e+02, 1.590000e+02,
+                            1.940000e+02, 1.380000e+02, 1.770000e+02, 2.160000e+02, 1.520000e+02,
+                            1.950000e+02, 2.380000e+02});
     compareTensor(Dot(b, a)->values(), ref);
 }
 

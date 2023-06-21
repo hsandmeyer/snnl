@@ -10,11 +10,10 @@
 
 using namespace snnl;
 
-template <typename TElem>
+template<typename TElem>
 void compRel(TElem a, TElem b, TElem rel_prec, TElem abs_prec = 1e-10)
 {
-    if (std::abs(a - b) / (std::max(a, b)) > rel_prec &&
-        std::abs(a - b) > abs_prec) {
+    if(std::abs(a - b) / (std::max(a, b)) > rel_prec && std::abs(a - b) > abs_prec) {
         std::cout << double(a) << " " << double(b) << " " << std::endl;
         FAIL();
     }
@@ -52,16 +51,18 @@ void test_node_grad(Node<double>& node, Module<double>& model,
 void test_grad(Module<double>& model, std::vector<NodeShPtr<double>> inputs)
 {
     auto loss = model.call(inputs);
-    loss->iterateWeights(
-        [&](Node<double>& weight) { test_node_grad(weight, model, inputs); });
+    loss->iterateWeights([&](Node<double>& weight) {
+        test_node_grad(weight, model, inputs);
+    });
 }
 
-class LinearConnectorTest
-    : public ::testing::TestWithParam<std::vector<size_t>> {};
+class LinearConnectorTest : public ::testing::TestWithParam<std::vector<size_t>>
+{};
 
 TEST_P(LinearConnectorTest, input_shape)
 {
-    struct LinearModel : public Module<double> {
+    struct LinearModel : public Module<double>
+    {
         std::shared_ptr<DenseModule<double>> dense;
 
         LinearModel(std::vector<size_t> shape)
@@ -69,8 +70,7 @@ TEST_P(LinearConnectorTest, input_shape)
             dense = this->addModule<DenseModule>(shape.back(), 8ul);
         }
 
-        virtual NodeShPtr<double>
-        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
             NodeShPtr<double> tmp = dense->call(inputs.at(0));
             tmp                   = Sigmoid(tmp);
@@ -98,18 +98,18 @@ TEST_P(LinearConnectorTest, input_shape)
 }
 
 INSTANTIATE_TEST_SUITE_P(BackwardTests, LinearConnectorTest,
-                         ::testing::Values(std::vector<size_t>{8},
-                                           std::vector<size_t>{1, 8},
+                         ::testing::Values(std::vector<size_t>{8}, std::vector<size_t>{1, 8},
                                            std::vector<size_t>{2, 8},
                                            std::vector<size_t>{2, 3, 8}));
 
-class SkipConnectorTest : public ::testing::TestWithParam<std::vector<size_t>> {
-};
+class SkipConnectorTest : public ::testing::TestWithParam<std::vector<size_t>>
+{};
 
 TEST_P(SkipConnectorTest, input_shape)
 {
 
-    struct SkipModel : Module<double> {
+    struct SkipModel : Module<double>
+    {
         DenseModuleShPtr<double> dense_1;
         DenseModuleShPtr<double> dense_2;
 
@@ -119,8 +119,7 @@ TEST_P(SkipConnectorTest, input_shape)
             dense_2 = addModule<DenseModule>(shape.back(), 8ul);
         }
 
-        virtual NodeShPtr<double>
-        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
             NodeShPtr<double> tmp_1 = dense_1->call(inputs[0]);
             tmp_1                   = Sigmoid(tmp_1);
@@ -147,6 +146,7 @@ TEST_P(SkipConnectorTest, input_shape)
 
     auto out = model.call(input);
 
+    // Multiple times to ensure zeroGrad works correctly
     out->computeGrad();
     out->computeGrad();
 
@@ -154,21 +154,20 @@ TEST_P(SkipConnectorTest, input_shape)
 }
 
 INSTANTIATE_TEST_SUITE_P(BackwardTests, SkipConnectorTest,
-                         ::testing::Values(std::vector<size_t>{8},
-                                           std::vector<size_t>{1, 8},
+                         ::testing::Values(std::vector<size_t>{8}, std::vector<size_t>{1, 8},
                                            std::vector<size_t>{2, 8},
                                            std::vector<size_t>{2, 3, 8}));
 
 TEST(BackwardTests, ComplexGraph)
 {
 
-    struct ComplexModel : Module<double> {
+    struct ComplexModel : Module<double>
+    {
         DenseModuleShPtr<double> dense;
 
         ComplexModel() { dense = addModule<DenseModule>(8ul, 8ul); }
 
-        virtual NodeShPtr<double>
-        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
             auto tmp_1_0 = dense->call(Sin(inputs[0]));
             tmp_1_0      = Sigmoid(tmp_1_0);
@@ -209,15 +208,14 @@ TEST(BackwardTests, ComplexGraph)
     auto res = model.call(input_1, input_2);
 
     res->computeGrad();
-    res->computeGrad();
 
     test_grad(model, {input_1, input_2});
 
     // Input is conectect via Sin. Sin does not involve any weights, nor are
     // there any weights above input_1 and input_2 -> Gradient should not have
     // be computed here
-    for (auto& input : {input_1, input_2}) {
-        for (auto& val : input->gradient()) {
+    for(auto& input : {input_1, input_2}) {
+        for(auto& val : input->gradient()) {
             EXPECT_EQ(val, 0.f);
         }
     }
@@ -226,7 +224,8 @@ TEST(BackwardTests, ComplexGraph)
 TEST(BackwardTests, BroadCastingAdd)
 {
 
-    struct BroadCastingModel : Module<double> {
+    struct BroadCastingModel : Module<double>
+    {
         NodeShPtr<double> weight_1;
         NodeShPtr<double> weight_2;
         NodeShPtr<double> weight_3;
@@ -238,8 +237,7 @@ TEST(BackwardTests, BroadCastingAdd)
             weight_3 = this->addWeight({2});
         }
 
-        virtual NodeShPtr<double>
-        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
             auto tmp = Add(inputs[0], weight_1);
             tmp      = Add(weight_2, tmp);
@@ -265,7 +263,6 @@ TEST(BackwardTests, BroadCastingAdd)
     auto res = model.call(input_1);
 
     res->computeGrad();
-    res->computeGrad();
 
     test_grad(model, {input_1});
 }
@@ -273,7 +270,8 @@ TEST(BackwardTests, BroadCastingAdd)
 TEST(BackwardTests, BroadCastingMult)
 {
 
-    struct BroadCastingModel : Module<double> {
+    struct BroadCastingModel : Module<double>
+    {
         NodeShPtr<double> weight_1;
         NodeShPtr<double> weight_2;
         NodeShPtr<double> weight_3;
@@ -285,8 +283,7 @@ TEST(BackwardTests, BroadCastingMult)
             weight_3 = this->addWeight({2});
         }
 
-        virtual NodeShPtr<double>
-        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
             auto tmp = Mult(inputs[0], weight_1);
             tmp      = Mult(weight_2, tmp);
@@ -312,7 +309,6 @@ TEST(BackwardTests, BroadCastingMult)
     auto res = model.call(input_1);
 
     res->computeGrad();
-    res->computeGrad();
 
     test_grad(model, {input_1});
 }
@@ -320,7 +316,8 @@ TEST(BackwardTests, BroadCastingMult)
 TEST(BackwardTests, BroadCastingSubtract)
 {
 
-    struct BroadCastingModel : Module<double> {
+    struct BroadCastingModel : Module<double>
+    {
         NodeShPtr<double> weight_1;
         NodeShPtr<double> weight_2;
         NodeShPtr<double> weight_3;
@@ -332,8 +329,7 @@ TEST(BackwardTests, BroadCastingSubtract)
             weight_3 = this->addWeight({2});
         }
 
-        virtual NodeShPtr<double>
-        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
             auto tmp = Subtract(inputs[0], weight_1);
             tmp      = Subtract(weight_2, tmp);
@@ -359,7 +355,6 @@ TEST(BackwardTests, BroadCastingSubtract)
     auto res = model.call(input_1);
 
     res->computeGrad();
-    res->computeGrad();
 
     test_grad(model, {input_1});
 }
@@ -367,7 +362,8 @@ TEST(BackwardTests, BroadCastingSubtract)
 TEST(BackwardTests, BroadCastingDivide)
 {
 
-    struct BroadCastingModel : Module<double> {
+    struct BroadCastingModel : Module<double>
+    {
         NodeShPtr<double> weight_1;
         NodeShPtr<double> weight_2;
         NodeShPtr<double> weight_3;
@@ -379,8 +375,7 @@ TEST(BackwardTests, BroadCastingDivide)
             weight_3 = this->addWeight({2});
         }
 
-        virtual NodeShPtr<double>
-        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
             auto tmp = Divide(inputs[0], weight_1);
             tmp      = Divide(weight_2, tmp);
@@ -406,7 +401,6 @@ TEST(BackwardTests, BroadCastingDivide)
     auto res = model.call(input_1);
 
     res->computeGrad();
-    res->computeGrad();
 
     test_grad(model, {input_1});
 }
@@ -414,7 +408,8 @@ TEST(BackwardTests, BroadCastingDivide)
 TEST(BackwardTests, Dot1)
 {
 
-    struct DotModel : Module<double> {
+    struct DotModel : Module<double>
+    {
         NodeShPtr<double> weight_1;
         NodeShPtr<double> weight_2;
         NodeShPtr<double> weight_3;
@@ -430,8 +425,7 @@ TEST(BackwardTests, Dot1)
             weight_5 = this->addWeight({});
         }
 
-        virtual NodeShPtr<double>
-        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
             auto tmp = Dot(weight_1, inputs[0]);
             tmp      = Dot(tmp, weight_2);
@@ -459,7 +453,6 @@ TEST(BackwardTests, Dot1)
     auto res = model.call(input_1);
 
     res->computeGrad();
-    res->computeGrad();
 
     test_grad(model, {input_1});
 }
@@ -467,7 +460,8 @@ TEST(BackwardTests, Dot1)
 TEST(BackwardTests, Dot2)
 {
 
-    struct DotModel : Module<double> {
+    struct DotModel : Module<double>
+    {
         NodeShPtr<double> weight_1;
         NodeShPtr<double> weight_2;
         NodeShPtr<double> weight_3;
@@ -479,8 +473,7 @@ TEST(BackwardTests, Dot2)
             weight_3 = this->addWeight({});
         }
 
-        virtual NodeShPtr<double>
-        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
             auto tmp = Dot(weight_1, inputs[0]);
             tmp      = Dot(tmp, weight_2);
@@ -502,14 +495,14 @@ TEST(BackwardTests, Dot2)
     auto res = model.call(input_1);
 
     res->computeGrad();
-    res->computeGrad();
 
     test_grad(model, {input_1});
 }
 
 TEST(ImageTest, ImageTest)
 {
-    struct ImageModel : public Module<double> {
+    struct ImageModel : public Module<double>
+    {
 
         std::shared_ptr<Conv2DModule<double>> conv2d_1;
         std::shared_ptr<Conv2DModule<double>> conv2d_2;
@@ -520,8 +513,7 @@ TEST(ImageTest, ImageTest)
             conv2d_2 = this->addModule<Conv2DModule>(3, 1, 8, 1);
         }
 
-        virtual NodeShPtr<double>
-        callHandler(std::vector<NodeShPtr<double>> inputs) override
+        virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
             // std::cout << "Input " << inputs.at(0)->values() << std::endl;
             NodeShPtr<double> tmp = conv2d_1->call(inputs.at(0));
@@ -546,7 +538,6 @@ TEST(ImageTest, ImageTest)
 
     auto res = model.call(input_1);
 
-    res->computeGrad();
     res->computeGrad();
 
     test_grad(model, {input_1});

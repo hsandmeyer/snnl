@@ -10,26 +10,26 @@ using namespace snnl;
 void compareTensor(Tensor<float>& a, Tensor<float>& b)
 {
     auto it = b.begin();
-    for (float& val : a) {
+    for(float& val : a) {
         EXPECT_FLOAT_EQ(val, *it);
-        it++;
+        ++it;
     }
 }
 
-struct SinModel : public Module<float> {
+struct TestModel : public Module<float>
+{
     DenseModuleShPtr<float> dense1;
     DenseModuleShPtr<float> dense2;
     DenseModuleShPtr<float> dense3;
 
-    SinModel()
+    TestModel()
     {
         dense1 = addModule<DenseModule>(1, 64);
         dense2 = addModule<DenseModule>(64, 16);
         dense3 = addModule<DenseModule>(16, 1);
     }
 
-    virtual NodeShPtr<float>
-    callHandler(std::vector<NodeShPtr<float>> input) override
+    virtual NodeShPtr<float> callHandler(std::vector<NodeShPtr<float>> input) override
     {
         NodeShPtr<float> out = dense1->call(input);
         out                  = Sigmoid(out);
@@ -42,17 +42,17 @@ struct SinModel : public Module<float> {
 
 TEST(InputOutputTest, ToByteTest)
 {
-    SinModel model;
+    TestModel model;
 
     NodeShPtr<float> input = Node<float>::create({16, 1});
 
-    for (auto weight : model.weights()) {
+    for(auto weight : model.weights()) {
         weight->values().uniform();
     }
 
     auto array = model.toByteArray();
 
-    SinModel model2;
+    TestModel model2;
     model2.fromByteArray(array);
     auto result  = model.call(input);
     auto result2 = model2.call(input);
@@ -62,17 +62,17 @@ TEST(InputOutputTest, ToByteTest)
 
 TEST(InputOutputTest, DiskTest)
 {
-    SinModel model;
+    TestModel model;
 
     NodeShPtr<float> input = Node<float>::create({16, 1});
 
-    for (auto weight : model.weights()) {
+    for(auto weight : model.weights()) {
         weight->values().uniform();
     }
 
     model.saveToFile("test.snnl");
 
-    SinModel model2;
+    TestModel model2;
 
     model2.loadFromFile("test");
 

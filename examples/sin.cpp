@@ -7,7 +7,8 @@
 
 using namespace snnl;
 
-struct SinModel : public Module<float> {
+struct SinModel : public Module<float>
+{
     DenseModuleShPtr<float> dense1;
     DenseModuleShPtr<float> dense2;
     DenseModuleShPtr<float> dense3;
@@ -19,8 +20,7 @@ struct SinModel : public Module<float> {
         dense3 = addModule<DenseModule>(16, 1);
     }
 
-    virtual NodeShPtr<float>
-    callHandler(std::vector<NodeShPtr<float>> input) override
+    virtual NodeShPtr<float> callHandler(std::vector<NodeShPtr<float>> input) override
     {
         NodeShPtr<float> out = dense1->call(input);
         out                  = Sigmoid(out);
@@ -39,7 +39,7 @@ int main()
 
     SGDOptimizer<float> optimizer(1e-1);
 
-    for (size_t step = 0; step < 100000; step++) {
+    for(size_t step = 0; step < 100000; step++) {
         input->values().uniform(-M_PI, M_PI);
 
         auto correct = Sin(input);
@@ -52,12 +52,11 @@ int main()
 
         optimizer.optimizeStep(loss);
 
-        if (step % 500 == 0) {
+        if(step % 500 == 0) {
             // std::cout << model.dense1->B()->values();
 
             std::cout << "Loss = " << loss->value(0) << std::endl;
-            std::cout << "Diff =\n"
-                      << out->values() - correct->values() << " " << std::endl;
+            std::cout << "Diff =\n" << out->values() - correct->values() << " " << std::endl;
 
             std::ofstream fout("test.txt");
 
@@ -68,10 +67,9 @@ int main()
             correct = Sin(input);
             correct->disconnect();
 
-            for (size_t ind = 0; ind < input->values().shapeFlattened(-1);
-                 ++ind) {
-                fout << input->value(ind, 0) << " " << correct->value(ind, 0)
-                     << " " << out->value(ind, 0) << std::endl;
+            for(size_t ind = 0; ind < input->values().shapeFlattened(-1); ++ind) {
+                fout << input->value(ind, 0) << " " << correct->value(ind, 0) << " "
+                     << out->value(ind, 0) << std::endl;
             }
 
             input->setDims({batch_size, 1});

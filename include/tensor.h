@@ -1,8 +1,10 @@
 #pragma once
 #include "index.h"
+#include "tools.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <forward_declare.h>
 #include <functional>
 #include <initializer_list>
@@ -20,6 +22,54 @@ namespace snnl
 template<typename TElemA, typename TElemB, typename Op>
 Tensor<TElemA> elementWiseCombination(const Tensor<TElemA>& a, const Tensor<TElemB>& b, Op op);
 
+struct All
+{};
+
+inline All all()
+{
+    return All();
+}
+
+struct Ellipsis
+{};
+
+inline Ellipsis ellipsis()
+{
+    return Ellipsis();
+}
+
+struct Full
+{};
+
+struct Range
+{
+    long minIndex = -1;
+    long maxIndex = -1;
+};
+
+inline Range range(Full, long maxIndex)
+{
+    return Range{-1, maxIndex};
+}
+
+inline Range range(long minIndex, Full)
+{
+    return Range{minIndex, -1};
+}
+
+inline Range range(long minIndex, long maxIndex)
+{
+    return Range{minIndex, maxIndex};
+}
+
+struct NewAxis
+{};
+
+inline NewAxis newAxis()
+{
+    return NewAxis();
+}
+
 template<class TElem>
 class Tensor
 {
@@ -28,15 +78,19 @@ class Tensor
     Index  _shape;
     Index  _strides;
 
-    std::mt19937_64                     _rng;
-    std::shared_ptr<std::vector<TElem>> _data = {};
+    std::mt19937_64 _rng;
+
+    size_t                              _mem_offset      = 0;
+    bool                                _is_partial_view = false;
+    std::shared_ptr<std::vector<TElem>> _data            = {};
 
     template<typename TArray>
     void fillDims(const TArray& shape)
     {
         checkResizeAllowed(shape);
 
-        _NDims = shape.size();
+        _mem_offset = 0;
+        _NDims      = shape.size();
         _shape.setNDims(shape.size());
 
         int i = 0;
@@ -62,7 +116,6 @@ class Tensor
     void checkResizeAllowed(TArray& shape)
     {
         if(_data->size() != NElemsFromShape(shape) && _data.use_count() > 1) {
-            std::cout << _data->size() << " " << NElemsFromShape(shape) << std::endl;
             throw std::domain_error("Trying to resize a tensor which "
                                     "is used somewhere else");
         }
@@ -92,7 +145,7 @@ class Tensor
         return i * _strides[_strides.NDims() - sizeof...(Ts) - 1] + dataOffset(im...);
     }
 
-    size_t dataOffset(size_t j) const { return j; }
+    size_t dataOffset(size_t j) const { return j * _strides[NDims() - 1] + _mem_offset; }
 
     // For scalar
     size_t dataOffset() const { return 0; }
@@ -191,7 +244,11 @@ class Tensor
             throw std::out_of_range("Number of inidizes exceeds number of dimension");
         }
 #endif
-        size_t index = 0;
+        if(NDims() == 0 && index_vec.size() > 0) {
+            // For iterators of scalars, which need to have a size. Otherwise there is no end()
+            return index_vec[0];
+        }
+        size_t index = _mem_offset;
         // Backwards, because we allow less indexes than NDims.
         // We start from the right
         for(size_t i = _strides.NDims(); i-- > 0;) {
@@ -217,6 +274,44 @@ public:
     typedef typename std::vector<TElem>::iterator       iterator;
     typedef typename std::vector<TElem>::const_iterator const_iterator;
 
+    class Iterator
+    {
+        Tensor<TElem>* _ptr;
+        Index          _position;
+        size_t         _index;
+
+    public:
+        Iterator(Tensor<TElem>& source, Index position)
+            : _ptr(&source)
+            , _position(position)
+        {
+            _index = _ptr->index(_position);
+        }
+
+        Iterator operator++()
+        {
+            for(size_t i = _position.size(); i-- > 0;) {
+                _position[i]++;
+                // We need to iterate beyond the end
+                if(i != 0 && _position[i] >= _ptr->shape(i)) {
+                    _position[i] = 0;
+                }
+                else {
+                    break;
+                }
+            }
+            _index = _ptr->index(_position);
+            return *this;
+        }
+        bool operator!=(const Iterator& other) { return _index != other._index; }
+
+        TElem& operator*() { return _ptr->_data->at(_index); }
+
+        const TElem& operator*() const { return _ptr->_data.at(_index); }
+
+        const Index& position() const { return _position; }
+    };
+
     // TODO: global seed
     Tensor()
         : _NDims(0)
@@ -224,6 +319,14 @@ public:
         , _data(std::make_shared<std::vector<TElem>>())
     {
         fillDims(std::array<size_t, 0>{});
+    }
+
+    Tensor(const std::initializer_list<int> shape)
+        : _NDims(shape.size())
+        , _rng(time(NULL))
+        , _data(std::make_shared<std::vector<TElem>>())
+    {
+        fillDims(shape);
     }
 
     Tensor(const std::initializer_list<size_t> shape)
@@ -244,12 +347,17 @@ public:
     }
 
     Tensor(const Tensor& other)
-        : _NDims(other._NDims)
-        , _shape(other._shape)
-        , _strides(other._strides)
-        , _rng(other._rng)
-        , _data(std::make_shared<std::vector<TElem>>(*other._data))
+        : _NDims(other.shape().size())
+        , _rng(time(NULL))
+        , _data(std::make_shared<std::vector<TElem>>())
     {
+        fillDims(other.shape());
+        auto itbegin = other.begin();
+        auto itend   = other.end();
+
+        for(auto it = itbegin; it != itend; ++it) {
+            (*this)(it.position()) = *it;
+        }
     }
 
     Tensor(Tensor&& shape) = default;
@@ -258,21 +366,57 @@ public:
 
     Tensor& operator=(const Tensor& other)
     {
-        _NDims   = other._NDims;
-        _shape   = other._shape;
-        _strides = other._strides;
-        _rng     = other._rng;
-        _data    = std::make_shared<std::vector<TElem>>(*other._data);
+        if(other.shape() != this->shape()) {
+            if(_is_partial_view) {
+                throw std::invalid_argument(
+                    "Cannot assign to view with different shape: This shape = " + shape() +
+                    ", other shape = " + other.shape());
+            }
+            // Dimensions do not match. Create new tensor
+            _NDims = other._NDims;
+            _shape = other._shape;
+            _data  = std::make_shared<std::vector<TElem>>();
+            fillStrides();
+        }
+        auto itbegin = other.begin();
+        auto itend   = other.end();
+
+        for(auto it = itbegin; it != itend; ++it) {
+            // Copy values by iterator to manage copying from views
+            (*this)(it.position()) = *it;
+        }
         return *this;
     }
 
-    auto begin() { return _data->begin(); }
+    Iterator begin()
+    {
+        Index begin(std::max(_shape.NDims(), 1ul));
+        for(size_t i = 0; i < begin.size(); i++) {
+            begin[i] = 0;
+        }
+        Iterator out(*this, begin);
+        return out;
+    }
 
-    auto end() { return _data->end(); }
+    Iterator end()
+    {
+        Index end(std::max(_shape.NDims(), 1ul));
+        for(size_t i = 1; i < end.size(); i++) {
+            end[i] = 0;
+        }
+        if(NDims() > 0) {
+            end[0] = _shape[0];
+        }
+        else {
+            end[0] = 1;
+        }
+        Iterator out(*this, end);
+        return out;
+    }
 
-    auto begin() const { return _data->begin(); }
+    Iterator begin() const { return const_cast<Tensor<TElem>*>(this)->begin(); }
 
-    auto end() const { return _data->end(); }
+    Iterator end() const { return const_cast<Tensor<TElem>*>(this)->end(); }
 
     int NDims() const { return _NDims; }
 
@@ -418,6 +562,127 @@ public:
     Tensor<TElem> viewAs(std::initializer_list<size_t> shape) const
     {
         return const_cast<Tensor<TElem>*>(this)->viewAs(shape);
+    }
+
+    size_t calcNumNewAxis(size_t numNewAxis) { return numNewAxis; }
+
+    template<typename TArg, typename... TArgs>
+    size_t calcNumNewAxis(size_t numNewAxis, TArg, TArgs... args)
+    {
+        if(std::is_same_v<TArg, NewAxis>) {
+            numNewAxis++;
+        }
+        return calcNumNewAxis(numNewAxis, args...);
+    }
+
+    template<typename... TArgs>
+    std::tuple<size_t, size_t> calcSizeOfEllipsisAndNumNewAxis(TArgs... args)
+    {
+        size_t numNewAxis   = calcNumNewAxis(0, args...);
+        size_t sizeEllipsis = NDims() - sizeof...(args) + numNewAxis + 1;
+        std::cout << sizeEllipsis << std::endl;
+        return std::tuple(sizeEllipsis, numNewAxis);
+    }
+
+    std::tuple<size_t, Index, Index> calcDimsAndMemOffset(size_t, size_t mem_offset, Index newDims,
+                                                          Index newStrides, size_t)
+    {
+        return std::tuple<size_t, Index, Index>(mem_offset, newDims, newStrides);
+    }
+
+    template<typename... TArgs>
+    std::tuple<size_t, Index, Index>
+    calcDimsAndMemOffset(size_t position, size_t mem_offset, Index newDims, Index newStrides,
+                         size_t sizeEllipsis, NewAxis, TArgs... args)
+    {
+
+        newDims.appendAxis(1);
+        if(int(position) > 0) {
+            newStrides.appendAxis(_strides[position - 1]);
+        }
+        else {
+            newStrides.appendAxis(_strides[0] * _shape[0]);
+        }
+
+        return calcDimsAndMemOffset(position, mem_offset, newDims, newStrides, sizeEllipsis,
+                                    args...);
+    }
+
+    template<typename... TArgs>
+    std::tuple<size_t, Index, Index>
+    calcDimsAndMemOffset(size_t position, size_t mem_offset, Index newDims, Index newStrides,
+                         size_t sizeEllipsis, size_t index, TArgs... args)
+    {
+
+        mem_offset += _strides[position] * index;
+        position++;
+        return calcDimsAndMemOffset(position, mem_offset, newDims, newStrides, sizeEllipsis,
+                                    args...);
+    }
+
+    template<typename... TArgs>
+    std::tuple<size_t, Index, Index> calcDimsAndMemOffset(size_t position, size_t mem_offset,
+                                                          Index newDims, Index newStrides,
+                                                          size_t sizeEllipsis, All, TArgs... args)
+    {
+        newDims.appendAxis(_shape[position]);
+        newStrides.appendAxis(_strides[position]);
+        position++;
+        return calcDimsAndMemOffset(position, mem_offset, newDims, newStrides, sizeEllipsis,
+                                    args...);
+    }
+
+    template<typename... TArgs>
+    std::tuple<size_t, Index, Index>
+    calcDimsAndMemOffset(size_t position, size_t mem_offset, Index newDims, Index newStrides,
+                         size_t sizeEllipsis, Ellipsis, TArgs... args)
+    {
+        for(size_t i = 0; i < sizeEllipsis; i++) {
+            newDims.appendAxis(_shape[position]);
+            newStrides.appendAxis(_strides[position]);
+            position++;
+        }
+        return calcDimsAndMemOffset(position, mem_offset, newDims, newStrides, sizeEllipsis,
+                                    args...);
+    }
+
+    template<typename... TArgs>
+    std::tuple<size_t, Index, Index>
+    calcDimsAndMemOffset(size_t position, size_t mem_offset, Index newDims, Index newStrides,
+                         size_t sizeEllipsis, Range range, TArgs... args)
+    {
+        size_t start_index = 0;
+        size_t end_index   = _shape[position];
+        if(range.minIndex >= 0) {
+            start_index = range.minIndex;
+        }
+        if(range.maxIndex >= 0) {
+            end_index = range.maxIndex;
+        }
+        mem_offset += start_index * _strides[position];
+        newStrides.appendAxis(_strides[position]);
+        newDims.appendAxis(end_index - start_index);
+        position++;
+        return calcDimsAndMemOffset(position, mem_offset, newDims, newStrides, sizeEllipsis,
+                                    args...);
+    }
+
+    template<typename... TArgs>
+    Tensor<TElem> partialView(TArgs... args)
+    {
+        auto [sizeEllipsis, numNewAxis] = calcSizeOfEllipsisAndNumNewAxis(args...);
+        auto [mem_offset, newShape, newStrides] =
+            calcDimsAndMemOffset(0, 0, {}, {}, sizeEllipsis, args...);
+
+        Tensor<TElem> out;
+
+        out._NDims           = newShape.size();
+        out._data            = _data;
+        out._mem_offset      = mem_offset;
+        out._is_partial_view = true;
+        out._shape           = newShape;
+        out._strides         = newStrides;
+        return out;
     }
 
     template<typename TArray>
@@ -761,6 +1026,9 @@ public:
 
     std::vector<uint8_t> toByteArray() const
     {
+        if(_is_partial_view) {
+            throw std::invalid_argument("Cannot save views");
+        }
         std::vector<uint8_t> out;
         auto                 shape = _shape.toByteArray();
 
@@ -799,6 +1067,47 @@ public:
     size_t fromByteArray(const std::vector<uint8_t>& array)
     {
         return fromByteArray(array.begin(), array.end());
+    }
+
+    bool saveToBMP(const std::string& filename, TElem minVal = 0, TElem maxVal = 255)
+    {
+
+        // From
+        // https://stackoverflow.com/questions/2654480/writing-bmp-image-in-pure-c-c-without-other-libraries
+
+        if(NDims() < 3) {
+            throw(std::invalid_argument("Require at least 3 dimension to save a bmp"));
+        }
+        int           height = _shape[-3];
+        int           width  = _shape[-2];
+        unsigned char image[height][width][BYTES_PER_PIXEL];
+        const char*   imageFileName = filename.c_str();
+
+        int i, j;
+        for(i = 0; i < height; i++) {
+            for(j = 0; j < width; j++) {
+
+                if(_shape[-1] < 3) {
+                    uint8_t val = uint8_t(std::round((double((*this)(i, j, -1)) - minVal) * 255. /
+                                                     (maxVal - minVal)));
+
+                    // For now: Use colored images for monochrome data...
+                    image[height - i - 1][j][2] = val; /// red
+                    image[height - i - 1][j][1] = val; /// green
+                    image[height - i - 1][j][0] = val; /// blue
+                }
+                else {
+                    image[height - i - 1][j][2] = uint8_t(std::round(
+                        (double((*this)(i, j, -3)) - minVal) * 255. / (maxVal - minVal))); /// red
+                    image[height - i - 1][j][1] = uint8_t(std::round(
+                        (double((*this)(i, j, -2)) - minVal) * 255. / (maxVal - minVal))); /// green
+                    image[height - i - 1][j][0] = uint8_t(std::round(
+                        (double((*this)(i, j, -1)) - minVal) * 255. / (maxVal - minVal))); /// blue
+                }
+            }
+        }
+
+        return generateBitmapImage((unsigned char*)image, height, width, imageFileName);
     }
 };
 

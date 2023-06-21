@@ -3,6 +3,7 @@
 #include <initializer_list>
 #include <iostream>
 #include <ostream>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
 
@@ -128,6 +129,22 @@ public:
         }
         o << "}";
         return o;
+    }
+
+    friend std::string operator+(std::string s, Index ind)
+    {
+        std::stringstream str;
+        str << s;
+        str << ind;
+        return str.str();
+    }
+
+    friend std::string operator+(Index ind, std::string s)
+    {
+        std::stringstream str;
+        str << ind;
+        str << s;
+        return str.str();
     }
 
     std::vector<uint8_t> toByteArray() const
