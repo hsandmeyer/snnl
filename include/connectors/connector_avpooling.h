@@ -32,9 +32,9 @@ class AvPoolingConnector : public Connector<TElem>
     void forwardHandler(const std::vector<NodeShPtr<TElem>>& input_nodes,
                         Node<TElem>*                         output_node) override
     {
-        Tensor<TElem> out_view = output_node->values().shrinkToNDimsFromRight(3);
+        Tensor<TElem> out_view = output_node->values().viewWithNDimsOnTheRight(3);
 
-        Tensor<TElem> input = input_nodes.at(0)->values().shrinkToNDimsFromRight(3);
+        Tensor<TElem> input = input_nodes.at(0)->values().viewWithNDimsOnTheRight(3);
 
         size_t n_channels = input.shape(-1);
 
@@ -65,9 +65,9 @@ class AvPoolingConnector : public Connector<TElem>
     void backwardHandler(const Node<TElem>*             output_node,
                          std::vector<NodeShPtr<TElem>>& input_nodes) override
     {
-        Tensor<TElem> out_grad_view = output_node->gradient().shrinkToNDimsFromRight(3);
+        Tensor<TElem> out_grad_view = output_node->gradient().viewWithNDimsOnTheRight(3);
 
-        Tensor<TElem> input_grad = input_nodes.at(0)->gradient().shrinkToNDimsFromRight(3);
+        Tensor<TElem> input_grad = input_nodes.at(0)->gradient().viewWithNDimsOnTheRight(3);
 
         size_t n_channels = input_grad.shape(-1);
 

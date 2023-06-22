@@ -714,9 +714,9 @@ public:
         return const_cast<Tensor<TElem>*>(this)->viewAs(arr);
     }
 
-    Tensor<TElem> reshapeFromIndices(std::initializer_list<long> list)
+    Tensor<TElem> viewFromIndices(std::initializer_list<long> list)
     {
-        return reshapeFromIndices(std::vector<long>(list.begin(), list.end()));
+        return viewFromIndices(std::vector<long>(list.begin(), list.end()));
     }
 
     /*
@@ -729,26 +729,26 @@ public:
     end. e.g.
 
     Tensor<int> t({2, 2, 2});
-    Tensor<int> t_view = t.reshapeFromIndices({1});
+    Tensor<int> t_view = t.viewFromIndices({1});
     t_view.shape(); //{2, 4}
 
-    t_view = t.reshapeFromIndices({2});
+    t_view = t.viewFromIndices({2});
     t_view.shape(); //{4, 2}
 
-    t_view = t.reshapeFromIndices({1,2});
+    t_view = t.viewFromIndices({1,2});
     t_view.shape(); //{2, 2, 2}
 
-    t_view = t.reshapeFromIndices({0,1});
+    t_view = t.viewFromIndices({0,1});
     t_view.shape(); //{1, 2, 4}
 
-    t_view = t.reshapeFromIndices({2,3});
+    t_view = t.viewFromIndices({2,3});
     t_view.shape(); //{4, 2, 1}
 
-    t_view = t.reshapeFromIndices({1, 2, 2});
+    t_view = t.viewFromIndices({1, 2, 2});
     t_view.shape(); //{2, 2, 1, 2}
     */
     template<typename TArray>
-    Tensor<TElem> reshapeFromIndices(TArray axes)
+    Tensor<TElem> viewFromIndices(TArray axes)
     {
         for(auto& axis : axes) {
             if(axis < 0) {
@@ -783,17 +783,22 @@ public:
     }
 
     template<typename TArray>
-    Tensor<TElem> reshapeFromIndices(TArray arr) const
+    Tensor<TElem> viewFromIndices(TArray arr) const
     {
-        return const_cast<Tensor<TElem>*>(this)->reshapeFromIndices(arr);
+        return const_cast<Tensor<TElem>*>(this)->viewFromIndices(arr);
     }
 
-    Tensor<TElem> reshapeFromIndices(std::initializer_list<long> list) const
+    Tensor<TElem> viewFromIndices(std::initializer_list<long> list) const
     {
-        return const_cast<Tensor<TElem>*>(this)->reshapeFromIndices(list);
+        return const_cast<Tensor<TElem>*>(this)->viewFromIndices(list);
     }
 
-    Tensor<TElem> shrinkToNDimsFromRight(const size_t NDims)
+    // Keep N dims on the right. Squeeze remaining dimensions on the left into axis 0 or add
+    // additional axis:
+    // With N = 2:
+    // shape = {2, 2, 2} -> {4, 2}
+    // shape = {2} -> {1, 2}
+    Tensor<TElem> viewWithNDimsOnTheRight(const size_t NDims)
     {
         if(NDims == 0) {
             throw std::invalid_argument("Shrinking to scalar ist not allowed");
@@ -816,7 +821,12 @@ public:
         return viewAs(newShape);
     }
 
-    Tensor<TElem> shrinkToNDimsFromLeft(const size_t NDims)
+    // Keep N dims on the left. Squeeze remaining dimensions on the  right into axis -1 or add
+    // additional axis:
+    // With N = 2:
+    // shape = {2, 2, 2} -> {2, 4}
+    // shape = {2} -> {2, 1}
+    Tensor<TElem> viewWithNDimsOnTheLeft(const size_t NDims)
     {
         if(NDims == 0) {
             throw std::invalid_argument("Shrinking to scalar ist not allowed");
@@ -843,14 +853,14 @@ public:
         return viewAs(newShape);
     }
 
-    Tensor<TElem> shrinkToNDimsFromLeft(const size_t NDims) const
+    Tensor<TElem> viewWithNDimsOnTheLeft(const size_t NDims) const
     {
-        return const_cast<Tensor<TElem>*>(this)->shrinkToNDimsFromLeft(NDims);
+        return const_cast<Tensor<TElem>*>(this)->viewWithNDimsOnTheLeft(NDims);
     }
 
-    Tensor<TElem> shrinkToNDimsFromRight(const size_t NDims) const
+    Tensor<TElem> viewWithNDimsOnTheRight(const size_t NDims) const
     {
-        return const_cast<Tensor<TElem>*>(this)->shrinkToNDimsFromRight(NDims);
+        return const_cast<Tensor<TElem>*>(this)->viewWithNDimsOnTheRight(NDims);
     }
 
     void forEach(std::function<void(const Index&)> func)
@@ -947,8 +957,8 @@ public:
             }
         }
 
-        Tensor<TElem> this_view  = reshapeFromIndices({-other.NDims()});
-        Tensor<TElem> other_view = other.shrinkToNDimsFromLeft(1);
+        Tensor<TElem> this_view  = viewFromIndices({-other.NDims()});
+        Tensor<TElem> other_view = other.viewWithNDimsOnTheLeft(1);
 
         for(size_t i = 0; i < this_view.shape(0); i++) {
             for(size_t j = 0; j < this_view.shape(1); j++) {
@@ -1126,9 +1136,9 @@ Tensor<TElemA> elementWiseCombination(const Tensor<TElemA>& a, const Tensor<TEle
 
     if(a.NDims() > b.NDims()) {
         Tensor<TElemA> out(a.shape());
-        Tensor<TElemA> out_view = out.reshapeFromIndices({-b.NDims()});
-        Tensor<TElemA> a_view   = a.reshapeFromIndices({-b.NDims()});
-        Tensor<TElemB> b_view   = b.shrinkToNDimsFromLeft(1);
+        Tensor<TElemA> out_view = out.viewFromIndices({-b.NDims()});
+        Tensor<TElemA> a_view   = a.viewFromIndices({-b.NDims()});
+        Tensor<TElemB> b_view   = b.viewWithNDimsOnTheLeft(1);
 
         for(size_t i = 0; i < a_view.shape(0); i++) {
             for(size_t j = 0; j < a_view.shape(1); j++) {
@@ -1139,9 +1149,9 @@ Tensor<TElemA> elementWiseCombination(const Tensor<TElemA>& a, const Tensor<TEle
     }
     else {
         Tensor<TElemA> out(b.shape());
-        Tensor<TElemA> out_view = out.reshapeFromIndices({-a.NDims()});
-        Tensor<TElemB> b_view   = b.reshapeFromIndices({-a.NDims()});
-        Tensor<TElemA> a_view   = a.shrinkToNDimsFromLeft(1);
+        Tensor<TElemA> out_view = out.viewFromIndices({-a.NDims()});
+        Tensor<TElemB> b_view   = b.viewFromIndices({-a.NDims()});
+        Tensor<TElemA> a_view   = a.viewWithNDimsOnTheLeft(1);
 
         for(size_t i = 0; i < b_view.shape(0); i++) {
             for(size_t j = 0; j < b_view.shape(1); j++) {

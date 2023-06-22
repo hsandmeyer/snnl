@@ -44,29 +44,19 @@ class DenseConnector : public Connector<TElem>
 
         dimChecks(input_nodes);
 
-        auto& output = output_node->values();
-
         Node<TElem>& W = *input_nodes.at(0);
         Node<TElem>& B = *input_nodes.at(1);
         Node<TElem>& x = *input_nodes.at(2);
 
-        if(x.NDims() > 1) {
-            // TODO Generalize this using a better tensor loop with some
-            // kind of ellipsis object
-            for(size_t higherDim = 0; higherDim < x.shapeFlattened(-2); higherDim++) {
-                for(size_t i = 0; i < output.shape(-1); i++) {
-                    output(higherDim, i) = B.value(i);
-                    for(size_t j = 0; j < x.shape(-1); j++) {
-                        output(higherDim, i) += W.value(i, j) * x.value(higherDim, j);
-                    }
-                }
-            }
-        }
-        else {
-            for(size_t i = 0; i < output.shape(-1); i++) {
-                output(i) = B.value(i);
+        auto x_val   = x.values().viewWithNDimsOnTheRight(2);
+        auto B_val   = B.values().viewWithNDimsOnTheRight(2);
+        auto out_val = output_node->values().viewWithNDimsOnTheRight(2);
+
+        for(size_t higherDim = 0; higherDim < x_val.shape(-2); higherDim++) {
+            for(size_t i = 0; i < out_val.shape(-1); i++) {
+                out_val(higherDim, i) = B_val(i);
                 for(size_t j = 0; j < x.shape(-1); j++) {
-                    output(i) += W.value(i, j) * x.value(j);
+                    out_val(higherDim, i) += W.value(i, j) * x_val(higherDim, j);
                 }
             }
         }
@@ -81,23 +71,17 @@ class DenseConnector : public Connector<TElem>
         Node<TElem>& B = *input_nodes.at(1);
         Node<TElem>& x = *input_nodes.at(2);
 
-        if(x.NDims() > 1) {
-            for(size_t higherDim = 0; higherDim < x.shapeFlattened(-2); higherDim++) {
-                for(size_t i = 0; i < output->shape(-1); i++) {
-                    B.grad(i) += output->grad(higherDim, i);
-                    for(size_t j = 0; j < x.shape(-1); j++) {
-                        x.grad(higherDim, j) += W.value(i, j) * output->grad(higherDim, i);
-                        W.grad(i, j) += x.value(higherDim, j) * output->grad(higherDim, i);
-                    }
-                }
-            }
-        }
-        else {
-            for(size_t i = 0; i < output->shape(-1); i++) {
-                B.grad(i) += output->grad(i);
-                for(size_t j = 0; j < x.shape(-1); j++) {
-                    x.grad(j) += W.value(i, j) * output->grad(i);
-                    W.grad(i, j) += x.value(j) * output->grad(i);
+        auto x_val    = x.values().viewWithNDimsOnTheRight(2);
+        auto x_grad   = x.gradient().viewWithNDimsOnTheRight(2);
+        auto B_grad   = B.gradient().viewWithNDimsOnTheRight(2);
+        auto out_grad = output->gradient().viewWithNDimsOnTheRight(2);
+
+        for(size_t higherDim = 0; higherDim < x_val.shape(-2); higherDim++) {
+            for(size_t i = 0; i < out_grad.shape(-1); i++) {
+                B_grad(i) += output->grad(higherDim, i);
+                for(size_t j = 0; j < x_val.shape(-1); j++) {
+                    x_grad(higherDim, j) += W.value(i, j) * output->grad(higherDim, i);
+                    W.grad(i, j) += x_val(higherDim, j) * output->grad(higherDim, i);
                 }
             }
         }

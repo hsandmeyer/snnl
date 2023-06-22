@@ -200,7 +200,7 @@ public:
 
     void setWeight(bool val) { _is_weight = val; }
 
-    size_t NDims() { return _values.NDims(); }
+    size_t NDims() const { return _values.NDims(); }
 
     void disconnect()
     {

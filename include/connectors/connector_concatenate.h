@@ -49,12 +49,12 @@ class ConcatenateConnector : public Connector<TElem>
     void forwardHandler(const std::vector<NodeShPtr<TElem>>& input_nodes,
                         Node<TElem>*                         output_node) override
     {
-        auto out_view = output_node->values().reshapeFromIndices({_axis, _axis + 1});
+        auto out_view = output_node->values().viewFromIndices({_axis, _axis + 1});
 
         size_t offset = 0;
         for(auto& node : input_nodes) {
 
-            auto node_view = node->values().reshapeFromIndices({_axis, _axis + 1});
+            auto node_view = node->values().viewFromIndices({_axis, _axis + 1});
 
             for(size_t i = 0; i < node_view.shape(0); i++) {
                 for(size_t j = 0; j < node_view.shape(1); j++) {
@@ -71,12 +71,12 @@ class ConcatenateConnector : public Connector<TElem>
     void backwardHandler(const Node<TElem>*             output_node,
                          std::vector<NodeShPtr<TElem>>& input_nodes) override
     {
-        auto out_grad_view = output_node->gradient().reshapeFromIndices({_axis, _axis + 1});
+        auto out_grad_view = output_node->gradient().viewFromIndices({_axis, _axis + 1});
 
         size_t offset = 0;
         for(auto& node : input_nodes) {
 
-            auto node_grad_view = node->gradient().reshapeFromIndices({_axis, _axis + 1});
+            auto node_grad_view = node->gradient().viewFromIndices({_axis, _axis + 1});
 
             for(size_t i = 0; i < node_grad_view.shape(0); i++) {
                 for(size_t j = 0; j < node_grad_view.shape(1); j++) {

@@ -44,9 +44,9 @@ public:
         auto& b = input_nodes.back()->values();
 
         if(a.NDims() > b.NDims()) {
-            Tensor<TElem> out_view = output_node->values().reshapeFromIndices({-b.NDims()});
-            Tensor<TElem> a_view   = a.reshapeFromIndices({-b.NDims()});
-            Tensor<TElem> b_view   = b.shrinkToNDimsFromLeft(1);
+            Tensor<TElem> out_view = output_node->values().viewFromIndices({-b.NDims()});
+            Tensor<TElem> a_view   = a.viewFromIndices({-b.NDims()});
+            Tensor<TElem> b_view   = b.viewWithNDimsOnTheLeft(1);
 
             for(size_t i = 0; i < a_view.shape(0); i++) {
                 for(size_t j = 0; j < a_view.shape(1); j++) {
@@ -55,9 +55,9 @@ public:
             }
         }
         else {
-            Tensor<TElem> out_view = output_node->values().reshapeFromIndices({-a.NDims()});
-            Tensor<TElem> b_view   = b.reshapeFromIndices({-a.NDims()});
-            Tensor<TElem> a_view   = a.shrinkToNDimsFromLeft(1);
+            Tensor<TElem> out_view = output_node->values().viewFromIndices({-a.NDims()});
+            Tensor<TElem> b_view   = b.viewFromIndices({-a.NDims()});
+            Tensor<TElem> a_view   = a.viewWithNDimsOnTheLeft(1);
 
             for(size_t i = 0; i < b_view.shape(0); i++) {
                 for(size_t j = 0; j < b_view.shape(1); j++) {
@@ -78,13 +78,13 @@ public:
 
         if(val_a.NDims() > val_b.NDims()) {
             Tensor<TElem> grad_out_view =
-                output_node->gradient().reshapeFromIndices({-val_b.NDims()});
+                output_node->gradient().viewFromIndices({-val_b.NDims()});
 
-            Tensor<TElem> a_val_view = val_a.reshapeFromIndices({-val_b.NDims()});
-            Tensor<TElem> b_val_view = val_b.shrinkToNDimsFromLeft(1);
+            Tensor<TElem> a_val_view = val_a.viewFromIndices({-val_b.NDims()});
+            Tensor<TElem> b_val_view = val_b.viewWithNDimsOnTheLeft(1);
 
-            Tensor<TElem> a_grad_view = grad_a.reshapeFromIndices({-grad_b.NDims()});
-            Tensor<TElem> b_grad_view = grad_b.shrinkToNDimsFromLeft(1);
+            Tensor<TElem> a_grad_view = grad_a.viewFromIndices({-grad_b.NDims()});
+            Tensor<TElem> b_grad_view = grad_b.viewWithNDimsOnTheLeft(1);
 
             for(size_t i = 0; i < a_val_view.shape(0); i++) {
                 for(size_t j = 0; j < a_val_view.shape(1); j++) {
@@ -98,13 +98,13 @@ public:
         }
         else {
             Tensor<TElem> grad_out_view =
-                output_node->gradient().reshapeFromIndices({-val_a.NDims()});
+                output_node->gradient().viewFromIndices({-val_a.NDims()});
 
-            Tensor<TElem> b_val_view = val_b.reshapeFromIndices({-val_a.NDims()});
-            Tensor<TElem> a_val_view = val_a.shrinkToNDimsFromLeft(1);
+            Tensor<TElem> b_val_view = val_b.viewFromIndices({-val_a.NDims()});
+            Tensor<TElem> a_val_view = val_a.viewWithNDimsOnTheLeft(1);
 
-            Tensor<TElem> b_grad_view = grad_b.reshapeFromIndices({-grad_a.NDims()});
-            Tensor<TElem> a_grad_view = grad_a.shrinkToNDimsFromLeft(1);
+            Tensor<TElem> b_grad_view = grad_b.viewFromIndices({-grad_a.NDims()});
+            Tensor<TElem> a_grad_view = grad_a.viewWithNDimsOnTheLeft(1);
 
             for(size_t i = 0; i < b_val_view.shape(0); i++) {
                 for(size_t j = 0; j < b_val_view.shape(1); j++) {

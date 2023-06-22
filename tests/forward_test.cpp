@@ -174,10 +174,10 @@ TEST(DotTest, MatrixTimesMatrix)
 TEST(DotTest, TensorTimesTensor)
 {
     NodeShPtr<float> a = Node<float>::create({2, 2, 3});
-    a->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 2, 14);
+    a->values().viewWithNDimsOnTheRight(1).arangeAlongAxis(0, 2, 14);
 
     NodeShPtr<float> b = Node<float>::create({3, 3, 2});
-    b->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 5, 23);
+    b->values().viewWithNDimsOnTheRight(1).arangeAlongAxis(0, 5, 23);
 
     Tensor<float> ref({2, 2, 3, 2});
     ref.setFlattenedValues({6.700000e+01, 7.600000e+01, 1.210000e+02, 1.300000e+02, 1.750000e+02,
@@ -206,10 +206,10 @@ TEST(DotTest, TensorTimesTensor)
 TEST(DotTest, TensorTimesTemsor2)
 {
     NodeShPtr<float> a = Node<float>::create({2, 3});
-    a->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 2, 8);
+    a->values().viewWithNDimsOnTheRight(1).arangeAlongAxis(0, 2, 8);
 
     NodeShPtr<float> b = Node<float>::create({3, 3, 2});
-    b->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 5, 23);
+    b->values().viewWithNDimsOnTheRight(1).arangeAlongAxis(0, 5, 23);
 
     Tensor<float> ref({2, 3, 2});
     ref.setFlattenedValues({6.700000e+01, 7.600000e+01, 1.210000e+02, 1.300000e+02, 1.750000e+02,
@@ -231,10 +231,10 @@ TEST(DotTest, TensorTimesTemsor2)
 TEST(DotTest, InnerProduct)
 {
     NodeShPtr<float> a = Node<float>::create({2});
-    a->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 2, 4);
+    a->values().viewWithNDimsOnTheRight(1).arangeAlongAxis(0, 2, 4);
 
     NodeShPtr<float> b = Node<float>::create({2});
-    b->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 5, 7);
+    b->values().viewWithNDimsOnTheRight(1).arangeAlongAxis(0, 5, 7);
 
     EXPECT_FLOAT_EQ(Dot(a, b)->value(), 28.f);
     EXPECT_FLOAT_EQ(Dot(b, a)->value(), 28.f);
@@ -243,10 +243,10 @@ TEST(DotTest, InnerProduct)
 TEST(DotTest, MatrixTimesVector)
 {
     NodeShPtr<float> a = Node<float>::create({2, 2});
-    a->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 2, 6);
+    a->values().viewWithNDimsOnTheRight(1).arangeAlongAxis(0, 2, 6);
 
     NodeShPtr<float> b = Node<float>::create({2});
-    b->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 5, 7);
+    b->values().viewWithNDimsOnTheRight(1).arangeAlongAxis(0, 5, 7);
 
     Tensor<float> ref({2});
     ref.setFlattenedValues({28, 50});
@@ -263,7 +263,7 @@ TEST(DotTest, ScalarTimesVector)
     std::cout << a->values() << std::endl;
 
     NodeShPtr<float> b = Node<float>::create({2});
-    b->values().shrinkToNDimsFromRight(1).arangeAlongAxis(0, 5, 7);
+    b->values().viewWithNDimsOnTheRight(1).arangeAlongAxis(0, 5, 7);
 
     Tensor<float> ref({2});
     ref.setFlattenedValues({15, 18});

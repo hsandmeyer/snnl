@@ -51,9 +51,9 @@ class Conv2DConnector : public Connector<TElem>
     void forwardHandler(const std::vector<NodeShPtr<TElem>>& input_nodes,
                         Node<TElem>*                         output_node) override
     {
-        Tensor<TElem> out_view = output_node->values().shrinkToNDimsFromRight(3);
+        Tensor<TElem> out_view = output_node->values().viewWithNDimsOnTheRight(3);
 
-        Tensor<TElem>  input  = input_nodes.at(1)->values().shrinkToNDimsFromRight(3);
+        Tensor<TElem>  input  = input_nodes.at(1)->values().viewWithNDimsOnTheRight(3);
         Tensor<TElem>& kernel = input_nodes.at(0)->values();
 
         size_t n_input_channels  = input.shape(-1);
@@ -101,10 +101,10 @@ class Conv2DConnector : public Connector<TElem>
     void backwardHandler(const Node<TElem>*             output_node,
                          std::vector<NodeShPtr<TElem>>& input_nodes) override
     {
-        Tensor<TElem> out_grad_view = output_node->gradient().shrinkToNDimsFromRight(3);
+        Tensor<TElem> out_grad_view = output_node->gradient().viewWithNDimsOnTheRight(3);
 
-        Tensor<TElem>  input       = input_nodes.at(1)->values().shrinkToNDimsFromRight(3);
-        Tensor<TElem>  grad_input  = input_nodes.at(1)->gradient().shrinkToNDimsFromRight(3);
+        Tensor<TElem>  input       = input_nodes.at(1)->values().viewWithNDimsOnTheRight(3);
+        Tensor<TElem>  grad_input  = input_nodes.at(1)->gradient().viewWithNDimsOnTheRight(3);
         Tensor<TElem>& kernel      = input_nodes.at(0)->values();
         Tensor<TElem>& grad_kernel = input_nodes.at(0)->gradient();
 

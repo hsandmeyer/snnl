@@ -122,8 +122,8 @@ class DotConnector : public Connector<TElem>
             b_view.appendAxis();
         }
 
-        a_view = a_view.shrinkToNDimsFromRight(2);
-        b_view = b_view.shrinkToNDimsFromRight(3);
+        a_view = a_view.viewWithNDimsOnTheRight(2);
+        b_view = b_view.viewWithNDimsOnTheRight(3);
 
         Index out_view_shape(3);
 
@@ -194,11 +194,11 @@ class DotConnector : public Connector<TElem>
             b_grad_view.appendAxis();
         }
 
-        a_view = a_view.shrinkToNDimsFromRight(2);
-        b_view = b_view.shrinkToNDimsFromRight(3);
+        a_view = a_view.viewWithNDimsOnTheRight(2);
+        b_view = b_view.viewWithNDimsOnTheRight(3);
 
-        a_grad_view = a_grad_view.shrinkToNDimsFromRight(2);
-        b_grad_view = b_grad_view.shrinkToNDimsFromRight(3);
+        a_grad_view = a_grad_view.viewWithNDimsOnTheRight(2);
+        b_grad_view = b_grad_view.viewWithNDimsOnTheRight(3);
 
         Index out_view_shape(3);
 
