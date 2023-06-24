@@ -68,4 +68,38 @@ NodeShPtr<TElem> Sigmoid(const NodeShPtr<TElem>& node)
     return Connector<TElem>::template apply<SigmoidConnector>(node);
 }
 
+template<typename TElem>
+struct CalcReLu
+{
+
+    static TElem forward(TElem& input)
+    {
+        if(input < 0) {
+            return 0;
+        }
+        else {
+            return input;
+        }
+    }
+
+    static TElem backward(TElem& input)
+    {
+        if(input < 0) {
+            return 0;
+        }
+        else {
+            return 1;
+        }
+    }
+};
+
+template<class TElem>
+using ReLuConnector = ElementWiseConnector<TElem, CalcReLu>;
+
+template<class TElem>
+NodeShPtr<TElem> ReLu(const NodeShPtr<TElem>& node)
+{
+    return Connector<TElem>::template apply<ReLuConnector>(node);
+}
+
 } // namespace snnl

@@ -73,19 +73,20 @@ class Conv2DConnector : public Connector<TElem>
 
                 long i_kernel_begin = std::max(-i, -half_width);
 
-                long i_kernel_end = std::min(image_width - i, half_width);
+                long i_kernel_end = std::min(image_width - i - 1, half_width);
 
-                for(long i_kernel = i_kernel_begin; i_kernel < i_kernel_end; i_kernel++) {
+                for(long i_kernel = i_kernel_begin; i_kernel <= i_kernel_end; i_kernel++) {
 
                     long j_kernel_begin = std::max(-j, -half_height);
 
-                    long j_kernel_end = std::min(image_height - i, half_height);
+                    long j_kernel_end = std::min(image_height - j - 1, half_height);
 
-                    for(long j_kernel = j_kernel_begin; j_kernel < j_kernel_end; j_kernel++) {
+                    for(long j_kernel = j_kernel_begin; j_kernel <= j_kernel_end; j_kernel++) {
 
                         for(size_t out_chan = 0; out_chan < n_output_channels; out_chan++) {
 
                             for(size_t in_chan = 0; in_chan < n_input_channels; in_chan++) {
+
                                 out_view(i, j, out_chan) +=
                                     kernel(i_kernel + half_width, j_kernel + half_height, in_chan,
                                            out_chan) *
@@ -125,24 +126,23 @@ class Conv2DConnector : public Connector<TElem>
 
                 long i_kernel_begin = std::max(-i, -half_width);
 
-                long i_kernel_end = std::min(image_width - i, half_width);
+                long i_kernel_end = std::min(image_width - i - 1, half_width);
 
-                for(long i_kernel = i_kernel_begin; i_kernel < i_kernel_end; i_kernel++) {
+                for(long i_kernel = i_kernel_begin; i_kernel <= i_kernel_end; i_kernel++) {
 
                     long j_kernel_begin = std::max(-j, -half_height);
 
-                    long j_kernel_end = std::min(image_height - i, half_height);
+                    long j_kernel_end = std::min(image_height - j - 1, half_height);
 
-                    for(long j_kernel = j_kernel_begin; j_kernel < j_kernel_end; j_kernel++) {
+                    for(long j_kernel = j_kernel_begin; j_kernel <= j_kernel_end; j_kernel++) {
 
-                        for(size_t in_chan = 0; in_chan < n_input_channels; in_chan++) {
+                        for(size_t out_chan = 0; out_chan < n_output_channels; out_chan++) {
 
-                            for(size_t out_chan = 0; out_chan < n_output_channels; out_chan++) {
+                            for(size_t in_chan = 0; in_chan < n_input_channels; in_chan++) {
 
                                 TElem out_grad = out_grad_view(i, j, out_chan);
 
                                 grad_kernel(i_kernel + half_width, j_kernel + half_height, in_chan,
-
                                             out_chan) +=
                                     input(i + i_kernel, j + j_kernel, in_chan) * out_grad;
 

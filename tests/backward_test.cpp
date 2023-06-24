@@ -1,9 +1,15 @@
 #include "common_connectors.h"
+#include "connectors/connector_combine.h"
+#include "connectors/connector_concatenate.h"
+#include "connectors/connector_cross_entropy.h"
+#include "connectors/connector_functions.h"
+#include "connectors/connector_softmax.h"
 #include "forward_declare.h"
 #include "module.h"
 #include "modules/module_conv2d.h"
 #include "modules/module_dense.h"
 #include "node.h"
+#include <cmath>
 #include <gtest/gtest-param-test.h>
 #include <gtest/gtest.h>
 #include <limits>
@@ -11,10 +17,12 @@
 using namespace snnl;
 
 template<typename TElem>
-void compRel(TElem a, TElem b, TElem rel_prec, TElem abs_prec = 1e-10)
+void compRel(const Index& pos, TElem a, TElem b, TElem rel_prec, TElem abs_prec = 1e-10)
 {
-    if(std::abs(a - b) / (std::max(a, b)) > rel_prec && std::abs(a - b) > abs_prec) {
-        std::cout << double(a) << " " << double(b) << " " << std::endl;
+    if(std::isinf(a) || std::isinf(b) || std::isnan(a) || std::isnan(b) ||
+       (std::abs(a - b) / (std::max(a, b)) > rel_prec && std::abs(a - b) > abs_prec))
+    {
+        std::cout << pos << " " << double(a) << " " << double(b) << " " << std::endl;
         FAIL();
     }
 }
@@ -24,7 +32,7 @@ void test_node_grad(Node<double>& node, Module<double>& model,
 {
 
     node.values().forEach([&](const Index& index) {
-        double eps        = 1e-4;
+        double eps        = 1e-5;
         double val_weight = node.value(index);
 
         node.value(index) = val_weight + eps;
@@ -44,7 +52,7 @@ void test_node_grad(Node<double>& node, Module<double>& model,
 
         double grad = node.grad(index);
 
-        compRel(double(numerical_grad), double(grad), 1e-4);
+        compRel(index, double(numerical_grad), double(grad), 1e-4);
     });
 }
 
@@ -211,7 +219,7 @@ TEST(BackwardTests, ComplexGraph)
 
     test_grad(model, {input_1, input_2});
 
-    // Input is conectect via Sin. Sin does not involve any weights, nor are
+    // Input is connected via Sin. Sin does not involve any weights, nor are
     // there any weights above input_1 and input_2 -> Gradient should not have
     // be computed here
     for(auto& input : {input_1, input_2}) {
@@ -499,6 +507,49 @@ TEST(BackwardTests, Dot2)
     test_grad(model, {input_1});
 }
 
+TEST(BackwardTests, SoftMaxAndCrossEntropy)
+{
+
+    struct SimpleModel : Module<double>
+    {
+        NodeShPtr<double> weight_1;
+        NodeShPtr<double> weight_2;
+
+        SimpleModel()
+        {
+            weight_1 = this->addWeight({10, 10});
+            weight_2 = this->addWeight({10});
+        }
+
+        virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
+        {
+            auto tmp = Dense(weight_1, weight_2, inputs[0]);
+            tmp      = SoftMax(tmp);
+            tmp      = SparseCategoricalCrosseEntropy(tmp, inputs[1]);
+            return tmp;
+        }
+    };
+
+    SimpleModel model;
+
+    NodeShPtr<double> input  = Node<double>::create({10, 10});
+    NodeShPtr<double> labels = Node<double>::create({10});
+
+    labels->values().setFlattenedValues({5, 1, 3, 2, 4, 0, 9, 7, 8, 6});
+    // labels->values().setFlattenedValues({5, 1, 2, 3, 4});
+
+    input->values().uniform();
+
+    model.weight_1->values().uniform();
+    model.weight_2->values().uniform();
+
+    auto res = model.call(input, labels);
+
+    res->computeGrad();
+
+    test_grad(model, {input, labels});
+}
+
 TEST(ImageTest, ImageTest)
 {
     struct ImageModel : public Module<double>
@@ -510,7 +561,7 @@ TEST(ImageTest, ImageTest)
         ImageModel()
         {
             conv2d_1 = this->addModule<Conv2DModule>(5, 3, 3, 8);
-            conv2d_2 = this->addModule<Conv2DModule>(3, 1, 8, 1);
+            conv2d_2 = this->addModule<Conv2DModule>(3, 1, 8, 3);
         }
 
         virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
@@ -523,9 +574,13 @@ TEST(ImageTest, ImageTest)
             tmp = AveragePooling(tmp, 4, 2);
             // std::cout << "Average " << tmp->values() << std::endl;
             tmp = Upscale2D(tmp, 2, 4);
-            // std::cout << "Upscale " << tmp->values() << std::endl;
+            // std::cout << "Upscale " << tmp->shape() << " " << tmp->values() << std::endl;
             tmp = conv2d_2->call(tmp);
-            // std::cout << "conv " << tmp->values() << std::endl;
+            // std::cout << "conv " << tmp->shape() << " " << tmp->values() << std::endl;
+            tmp = ReLu(tmp);
+            // std::cout << "ReLu" << tmp->values() << std::endl;
+            tmp = Flatten(tmp);
+            // std::cout << "Flatten " << tmp->values() << std::endl;
             return Sum(tmp);
         }
     };
@@ -542,10 +597,68 @@ TEST(ImageTest, ImageTest)
 
     test_grad(model, {input_1});
 
-    NodeShPtr<double> input_2 = Node<double>::create({9, 8, 3});
+    NodeShPtr<double> input_2 = Node<double>::create({9, 7, 3});
     input_2->values().uniform();
 
-    res = model.call(input_1);
+    res = model.call(input_2);
+
+    res->computeGrad();
+    test_grad(model, {input_2});
+}
+
+TEST(ImageTest, UNet)
+{
+    struct ImageModel : public Module<double>
+    {
+
+        std::shared_ptr<Conv2DModule<double>> conv2d_1;
+        std::shared_ptr<Conv2DModule<double>> conv2d_2;
+        std::shared_ptr<Conv2DModule<double>> conv2d_3;
+
+        ImageModel()
+        {
+            conv2d_1 = this->addModule<Conv2DModule>(5, 5, 3, 32);
+            conv2d_2 = this->addModule<Conv2DModule>(3, 3, 32, 32);
+            conv2d_3 = this->addModule<Conv2DModule>(3, 3, 32, 3);
+        }
+
+        virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
+        {
+            // std::cout << "Input " << inputs.at(0)->values() << std::endl;
+            NodeShPtr<double> tmp = conv2d_1->call(inputs.at(0));
+            // std::cout << "Conv2d " << tmp->values() << std::endl;
+            tmp = Sigmoid(tmp);
+            // std::cout << "Sigmoid " << tmp->values() << std::endl;
+            tmp = AveragePooling(tmp, 4, 2);
+            // std::cout << "Average " << tmp->values() << std::endl;
+            tmp = Upscale2D(tmp, 2, 4);
+            // std::cout << "Upscale " << tmp->shape() << " " << tmp->values() << std::endl;
+            tmp = conv2d_2->call(tmp);
+            // std::cout << "conv " << tmp->shape() << " " << tmp->values() << std::endl;
+            tmp = ReLu(tmp);
+            // std::cout << "ReLu" << tmp->values() << std::endl;
+            tmp = Flatten(tmp);
+            // std::cout << "Flatten " << tmp->values() << std::endl;
+            return Sum(tmp);
+        }
+    };
+
+    ImageModel model;
+
+    NodeShPtr<double> input_1 = Node<double>::create({10, 8, 3});
+
+    input_1->values().uniform();
+
+    auto res = model.call(input_1);
+
+    res->computeGrad();
+
+    test_grad(model, {input_1});
+
+    NodeShPtr<double> input_2 = Node<double>::create({9, 7, 3});
+    input_2->values().uniform();
+
+    res = model.call(input_2);
 
     res->computeGrad();
     test_grad(model, {input_2});

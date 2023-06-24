@@ -181,6 +181,8 @@ public:
 
     const Index& shape() const { return _values.shape(); }
 
+    size_t NElems() const { return _values.NElems(); }
+
     template<typename TArray>
     void setDims(const TArray& arr)
     {

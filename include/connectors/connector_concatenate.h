@@ -25,7 +25,9 @@ class ConcatenateConnector : public Connector<TElem>
             }
             for(long dim_ind = 0; dim_ind < static_cast<long>(shape.NDims()); dim_ind++) {
                 if(dim_ind != _axis && shape[dim_ind] != input_nodes.at(i)->shape(dim_ind)) {
-                    throw std::invalid_argument("Concatenate: shape mismatch");
+                    throw std::invalid_argument(
+                        "Concatenate: shape mismatch:" + input_nodes.at(0)->shape() + " vs " +
+                        input_nodes.at(1)->shape());
                 }
             }
         }
@@ -81,7 +83,7 @@ class ConcatenateConnector : public Connector<TElem>
             for(size_t i = 0; i < node_grad_view.shape(0); i++) {
                 for(size_t j = 0; j < node_grad_view.shape(1); j++) {
                     for(size_t k = 0; k < node_grad_view.shape(2); k++) {
-                        node_grad_view(i, j, k) = out_grad_view(i, j + offset, k);
+                        node_grad_view(i, j, k) += out_grad_view(i, j + offset, k);
                     }
                 }
             }
