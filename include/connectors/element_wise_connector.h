@@ -21,22 +21,26 @@ public:
     void forwardHandler(const std::vector<NodeShPtr<TElem>>& input_nodes,
                         Node<TElem>*                         output_node) override
     {
-        NodeShPtr<TElem> input_node = input_nodes.front();
-        for(size_t ind = 0; ind < output_node->shapeFlattened(-1); ind++) {
-            output_node->value(ind) = Functor<TElem>::forward(input_node->value(ind));
+        auto input_vals  = input_nodes.front()->values().flatten();
+        auto output_vals = output_node->values().flatten();
+
+        for(size_t ind = 0; ind < output_vals.size(); ind++) {
+            output_vals(ind) = Functor<TElem>::forward(input_vals(ind));
         }
     }
 
     void backwardHandler(const Node<TElem>*             output_node,
                          std::vector<NodeShPtr<TElem>>& input_nodes) override
     {
-        NodeShPtr<TElem> input_node = input_nodes.front();
+        auto input_vals  = input_nodes.front()->values().flatten();
+        auto input_grad  = input_nodes.front()->gradient().flatten();
+        auto output_grad = output_node->gradient().flatten();
 
-        for(size_t ind = 0; ind < output_node->shapeFlattened(-1); ind++) {
-            TElem input_value = input_node->value(ind);
-            TElem output_grad = output_node->grad(ind);
+        for(size_t ind = 0; ind < output_grad.size(); ind++) {
+            TElem input_value     = input_vals(ind);
+            TElem output_gradient = output_grad(ind);
 
-            input_node->grad(ind) += Functor<TElem>::backward(input_value) * output_grad;
+            input_grad(ind) += Functor<TElem>::backward(input_value) * output_gradient;
         }
     }
 };

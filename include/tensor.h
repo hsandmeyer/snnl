@@ -150,7 +150,7 @@ class Tensor
     // For scalar
     size_t dataOffset() const { return 0; }
 
-    void stream(Index& ind, int dim, std::ostream& o) const
+    void stream(Index& ind, long dim, std::ostream& o) const
     {
         if(_NDims == 0) {
             o << (*_data)[0];
@@ -270,300 +270,6 @@ class Tensor
 #pragma GCC diagnostic pop
     }
 
-public:
-    typedef typename std::vector<TElem>::iterator       iterator;
-    typedef typename std::vector<TElem>::const_iterator const_iterator;
-
-    class Iterator
-    {
-        Tensor<TElem>* _ptr;
-        Index          _position;
-        size_t         _index;
-
-    public:
-        Iterator(Tensor<TElem>& source, Index position)
-            : _ptr(&source)
-            , _position(position)
-        {
-            _index = _ptr->index(_position);
-        }
-
-        Iterator operator++()
-        {
-            for(size_t i = _position.size(); i-- > 0;) {
-                _position[i]++;
-                // We need to iterate beyond the end
-                if(i != 0 && _position[i] >= _ptr->shape(i)) {
-                    _position[i] = 0;
-                }
-                else {
-                    break;
-                }
-            }
-            _index = _ptr->index(_position);
-            return *this;
-        }
-        bool operator!=(const Iterator& other) { return _index != other._index; }
-
-        TElem& operator*() { return _ptr->_data->at(_index); }
-
-        const TElem& operator*() const { return _ptr->_data.at(_index); }
-
-        const Index& position() const { return _position; }
-    };
-
-    // TODO: global seed
-    Tensor()
-        : _NDims(0)
-        , _rng(time(NULL))
-        , _data(std::make_shared<std::vector<TElem>>())
-    {
-        fillDims(std::array<size_t, 0>{});
-    }
-
-    Tensor(const std::initializer_list<int> shape)
-        : _NDims(shape.size())
-        , _rng(time(NULL))
-        , _data(std::make_shared<std::vector<TElem>>())
-    {
-        fillDims(shape);
-    }
-
-    Tensor(const std::initializer_list<size_t> shape)
-        : _NDims(shape.size())
-        , _rng(time(NULL))
-        , _data(std::make_shared<std::vector<TElem>>())
-    {
-        fillDims(shape);
-    }
-
-    template<typename TArray>
-    Tensor(const TArray& shape)
-        : _NDims(shape.size())
-        , _rng(time(NULL))
-        , _data(std::make_shared<std::vector<TElem>>())
-    {
-        fillDims(shape);
-    }
-
-    Tensor(const Tensor& other)
-        : _NDims(other.shape().size())
-        , _rng(time(NULL))
-        , _data(std::make_shared<std::vector<TElem>>())
-    {
-        fillDims(other.shape());
-        auto itbegin = other.begin();
-        auto itend   = other.end();
-
-        for(auto it = itbegin; it != itend; ++it) {
-            (*this)(it.position()) = *it;
-        }
-    }
-
-    Tensor(Tensor&& shape) = default;
-
-    Tensor& operator=(Tensor&& shape) = default;
-
-    Tensor& operator=(const Tensor& other)
-    {
-        if(other.shape() != this->shape()) {
-            if(_is_partial_view) {
-                throw std::invalid_argument(
-                    "Cannot assign to view with different shape: This shape = " + shape() +
-                    ", other shape = " + other.shape());
-            }
-            // Dimensions do not match. Create new tensor
-            _NDims = other._NDims;
-            _shape = other._shape;
-            _data  = std::make_shared<std::vector<TElem>>();
-            fillStrides();
-        }
-        auto itbegin = other.begin();
-        auto itend   = other.end();
-
-        for(auto it = itbegin; it != itend; ++it) {
-            // Copy values by iterator to manage copying from views
-            (*this)(it.position()) = *it;
-        }
-        return *this;
-    }
-
-    Iterator begin()
-    {
-        Index begin(std::max(_shape.NDims(), 1ul));
-        for(size_t i = 0; i < begin.size(); i++) {
-            begin[i] = 0;
-        }
-        Iterator out(*this, begin);
-        return out;
-    }
-
-    Iterator end()
-    {
-        Index end(std::max(_shape.NDims(), 1ul));
-        for(size_t i = 1; i < end.size(); i++) {
-            end[i] = 0;
-        }
-        if(NDims() > 0) {
-            end[0] = _shape[0];
-        }
-        else {
-            end[0] = 1;
-        }
-        Iterator out(*this, end);
-        return out;
-    }
-
-    Iterator begin() const { return const_cast<Tensor<TElem>*>(this)->begin(); }
-
-    Iterator end() const { return const_cast<Tensor<TElem>*>(this)->end(); }
-
-    int NDims() const { return _NDims; }
-
-    Index& shape() { return _shape; }
-
-    const Index& shape() const { return _shape; }
-
-    size_t shape(int i) const
-    {
-        if(i < 0) {
-            i += NDims();
-        }
-
-#ifdef DEBUG
-
-        if(i < 0 || i >= static_cast<int>(_shape.size())) {
-            throw std::out_of_range(
-                std::string("Shape: Index " + std::to_string(i) + " is out of range"));
-        }
-#endif
-
-        return _shape[i];
-    }
-
-    size_t shapeFlattened(int i) const
-    {
-        if(i < 0) {
-            i += NDims();
-        }
-
-        if(i >= NDims() || i < 0) {
-            throw std::out_of_range("shapeFlattened Axis " + std::to_string(i) +
-                                    " is out of range");
-        }
-
-        return NElems() / stride(i);
-    }
-
-    size_t stride(int i) const
-    {
-        if(i < 0) {
-            i += NDims();
-        }
-#ifdef DEBUG
-
-        if(i < 0 || i >= static_cast<int>(_strides.size())) {
-            throw std::out_of_range(
-                std::string("stride: Index " + std::to_string(i) + " is out of range"));
-        }
-#endif
-        return _strides[i];
-    }
-
-    bool isScalar() const { return _NDims == 0; }
-
-    size_t NElems() const
-    {
-        if(_NDims == 0) {
-            return 1;
-        }
-        return _strides[0] * _shape[0];
-    }
-
-    template<typename... T>
-    TElem& operator()(T... indexes)
-    {
-#ifdef DEBUG
-        numIndicesCheck(indexes...);
-        return _data->at(dataOffset(indexes...));
-#else
-        return (*_data)[dataOffset(indexes...)];
-#endif
-    }
-
-    template<typename... T>
-    const TElem& operator()(T... indexes) const
-    {
-#ifdef DEBUG
-        numIndicesCheck(indexes...);
-        return _data->at(dataOffset(indexes...));
-#else
-        return (*_data)[dataOffset(indexes...)];
-#endif
-    }
-
-    const TElem& operator()(const Index& index_vec) const
-    {
-        return const_cast<TElem&>((*const_cast<Tensor<TElem>*>(this))(index_vec));
-    }
-
-    TElem& operator()(const Index& index_vec)
-    {
-#ifdef DEBUG
-        return (*_data)[index(index_vec)];
-#else
-        return _data->at(index(index_vec));
-#endif
-    }
-
-    template<typename TArray>
-    void setDims(const TArray& arr)
-    {
-        fillDims(arr);
-    }
-
-    void setDims(const std::initializer_list<size_t> shape) { fillDims(shape); }
-
-    void appendAxis(const size_t dim_len)
-    {
-        _NDims++;
-        _shape.appendAxis(dim_len);
-        _strides.appendAxis(0);
-
-        checkResizeAllowed(_shape);
-        fillStrides();
-    }
-
-    void appendAxis()
-    {
-        _NDims++;
-        _shape.appendAxis(1);
-        _strides.appendAxis(0);
-        fillStrides(false);
-    }
-
-    void prependAxis()
-    {
-        _NDims++;
-        _shape.prependAxis(1);
-        _strides.prependAxis(0);
-        fillStrides(false);
-    }
-
-    Tensor<TElem> view() { return viewAs(_shape); }
-
-    Tensor<TElem> view() const { return viewAs(_shape); }
-
-    Tensor<TElem> viewAs(std::initializer_list<size_t> shape)
-    {
-        return viewAs(std::vector<size_t>(shape.begin(), shape.end()));
-    }
-
-    Tensor<TElem> viewAs(std::initializer_list<size_t> shape) const
-    {
-        return const_cast<Tensor<TElem>*>(this)->viewAs(shape);
-    }
-
     size_t calcNumNewAxis(size_t numNewAxis) { return numNewAxis; }
 
     template<typename TArg, typename... TArgs>
@@ -666,8 +372,288 @@ public:
                                     args...);
     }
 
+public:
+    typedef typename std::vector<TElem>::iterator       iterator;
+    typedef typename std::vector<TElem>::const_iterator const_iterator;
+
+    class Iterator
+    {
+        Tensor<TElem>* _ptr;
+        Index          _position;
+        size_t         _index;
+
+    public:
+        Iterator(Tensor<TElem>& source, Index position)
+            : _ptr(&source)
+            , _position(position)
+        {
+            _index = _ptr->index(_position);
+        }
+
+        Iterator operator++()
+        {
+            for(size_t i = _position.size(); i-- > 0;) {
+                _position[i]++;
+                // We need to iterate beyond the end
+                if(i != 0 && _position[i] >= _ptr->shape(i)) {
+                    _position[i] = 0;
+                }
+                else {
+                    break;
+                }
+            }
+            _index = _ptr->index(_position);
+            return *this;
+        }
+        bool operator!=(const Iterator& other) { return _index != other._index; }
+
+        TElem& operator*() { return _ptr->_data->at(_index); }
+
+        const TElem& operator*() const { return _ptr->_data.at(_index); }
+
+        const Index& position() const { return _position; }
+    };
+
+    // TODO: global seed
+    Tensor()
+        : _NDims(0)
+        , _rng(time(NULL))
+        , _data(std::make_shared<std::vector<TElem>>())
+    {
+        fillDims(std::array<size_t, 0>{});
+    }
+
+    Tensor(const std::initializer_list<int> shape)
+        : _NDims(shape.size())
+        , _rng(time(NULL))
+        , _data(std::make_shared<std::vector<TElem>>())
+    {
+        fillDims(shape);
+    }
+
+    Tensor(const std::initializer_list<size_t> shape)
+        : _NDims(shape.size())
+        , _rng(time(NULL))
+        , _data(std::make_shared<std::vector<TElem>>())
+    {
+        fillDims(shape);
+    }
+
+    template<typename TArray>
+    Tensor(const TArray& shape)
+        : _NDims(shape.size())
+        , _rng(time(NULL))
+        , _data(std::make_shared<std::vector<TElem>>())
+    {
+        fillDims(shape);
+    }
+
+    Tensor(const Tensor&) = default;
+
+    Tensor(Tensor&&) = default;
+
+    Tensor copy()
+    {
+
+        Tensor out(_shape);
+        auto   itbegin = begin();
+        auto   itend   = end();
+
+        for(auto it = itbegin; it != itend; ++it) {
+            out(it.position()) = *it;
+        }
+        return out;
+    }
+
+    Tensor& operator=(const Tensor& other)
+    {
+        if(other.shape() != this->shape()) {
+            if(_is_partial_view) {
+                throw std::invalid_argument(
+                    "Cannot assign to partial view with different shape: This shape = " + shape() +
+                    ", other shape = " + other.shape());
+            }
+            // Dimensions do not match. Create new tensor
+            _NDims = other._NDims;
+            _shape = other._shape;
+            _data  = std::make_shared<std::vector<TElem>>();
+            fillStrides();
+        }
+        auto itbegin = other.begin();
+        auto itend   = other.end();
+
+        for(auto it = itbegin; it != itend; ++it) {
+            // Copy values by iterator to manage copying from views
+            (*this)(it.position()) = *it;
+        }
+        return *this;
+    }
+
+    Iterator begin()
+    {
+        Index begin(std::max(_shape.NDims(), 1l));
+        for(size_t i = 0; i < begin.size(); i++) {
+            begin[i] = 0;
+        }
+        Iterator out(*this, begin);
+        return out;
+    }
+
+    Iterator end()
+    {
+        Index end(std::max(_shape.NDims(), 1l));
+        for(size_t i = 1; i < end.size(); i++) {
+            end[i] = 0;
+        }
+        if(NDims() > 0) {
+            end[0] = _shape[0];
+        }
+        else {
+            end[0] = 1;
+        }
+        Iterator out(*this, end);
+        return out;
+    }
+
+    Iterator begin() const { return const_cast<Tensor<TElem>*>(this)->begin(); }
+
+    Iterator end() const { return const_cast<Tensor<TElem>*>(this)->end(); }
+
+    long NDims() const { return _NDims; }
+
+    bool isScalar() const { return _NDims == 0; }
+
+    size_t size() { return NElems(); }
+
+    Index& shape() { return _shape; }
+
+    const Index& shape() const { return _shape; }
+
+    size_t shape(int i) const
+    {
+        if(i < 0) {
+            i += NDims();
+        }
+
+#ifdef DEBUG
+
+        if(i < 0 || i >= static_cast<int>(_shape.size())) {
+            throw std::out_of_range(
+                std::string("Shape: Index " + std::to_string(i) + " is out of range"));
+        }
+#endif
+
+        return _shape[i];
+    }
+
+    size_t stride(int i) const
+    {
+        if(i < 0) {
+            i += NDims();
+        }
+#ifdef DEBUG
+
+        if(i < 0 || i >= static_cast<int>(_strides.size())) {
+            throw std::out_of_range(
+                std::string("stride: Index " + std::to_string(i) + " is out of range"));
+        }
+#endif
+        return _strides[i];
+    }
+
+    size_t NElems() const
+    {
+        if(_NDims == 0) {
+            return 1;
+        }
+        return _strides[0] * _shape[0];
+    }
+
+    template<typename... T>
+    TElem& operator()(T... indexes)
+    {
+#ifdef DEBUG
+        numIndicesCheck(indexes...);
+        return _data->at(dataOffset(indexes...));
+#else
+        return (*_data)[dataOffset(indexes...)];
+#endif
+    }
+
+    template<typename... T>
+    const TElem& operator()(T... indexes) const
+    {
+#ifdef DEBUG
+        numIndicesCheck(indexes...);
+        return _data->at(dataOffset(indexes...));
+#else
+        return (*_data)[dataOffset(indexes...)];
+#endif
+    }
+
+    const TElem& operator()(const Index& index_vec) const
+    {
+        return const_cast<TElem&>((*const_cast<Tensor<TElem>*>(this))(index_vec));
+    }
+
+    TElem& operator()(const Index& index_vec)
+    {
+#ifdef DEBUG
+        return (*_data)[index(index_vec)];
+#else
+        return _data->at(index(index_vec));
+#endif
+    }
+
+    template<typename TArray>
+    void setDims(const TArray& arr)
+    {
+        fillDims(arr);
+    }
+
+    void setDims(const std::initializer_list<size_t> shape) { fillDims(shape); }
+
+    void appendAxis(const size_t dim_len)
+    {
+        _NDims++;
+        _shape.appendAxis(dim_len);
+        _strides.appendAxis(0);
+
+        checkResizeAllowed(_shape);
+        fillStrides();
+    }
+
+    void appendAxis()
+    {
+        _NDims++;
+        _shape.appendAxis(1);
+        _strides.appendAxis(0);
+        fillStrides(false);
+    }
+
+    void prependAxis()
+    {
+        _NDims++;
+        _shape.prependAxis(1);
+        _strides.prependAxis(0);
+        fillStrides(false);
+    }
+
+    Tensor<TElem> flatten() { return viewFromIndices({}); }
+    Tensor<TElem> flatten() const { return viewFromIndices({}); }
+
+    Tensor<TElem> viewAs(std::initializer_list<size_t> shape)
+    {
+        return viewAs(std::vector<size_t>(shape.begin(), shape.end()));
+    }
+
+    Tensor<TElem> viewAs(std::initializer_list<size_t> shape) const
+    {
+        return const_cast<Tensor<TElem>*>(this)->viewAs(shape);
+    }
+
     template<typename... TArgs>
-    Tensor<TElem> partialView(TArgs... args)
+    Tensor<TElem> viewAs(TArgs... args)
     {
         auto [sizeEllipsis, numNewAxis] = calcSizeOfEllipsisAndNumNewAxis(args...);
         auto [mem_offset, newShape, newStrides] =
@@ -678,8 +664,8 @@ public:
         out._NDims           = newShape.size();
         out._data            = _data;
         out._mem_offset      = mem_offset;
-        out._is_partial_view = true;
         out._shape           = newShape;
+        out._is_partial_view = NElemsFromShape(newShape) != NElems();
         out._strides         = newStrides;
         return out;
     }
@@ -810,7 +796,7 @@ public:
             newShape[-shape_ind] = shape(-shape_ind);
         }
         if(NDims <= _NDims) {
-            newShape[0] = shapeFlattened(-NDims);
+            newShape[0] = NElems() / _strides[_NDims - NDims];
         }
         else {
             for(; shape_ind <= static_cast<long>(NDims); shape_ind++) {
@@ -850,6 +836,26 @@ public:
             }
         }
         return viewAs(newShape);
+    }
+
+    void adjustToNDimsOnTheLeft(const size_t NDims)
+    {
+        auto view        = viewWithNDimsOnTheLeft(NDims);
+        _NDims           = view._NDims;
+        _shape           = view._shape;
+        _strides         = view._strides;
+        _mem_offset      = view._mem_offset;
+        _is_partial_view = view._is_partial_view;
+    }
+
+    void adjustToNDimsOnTheRight(const size_t NDims)
+    {
+        auto view        = viewWithNDimsOnTheRight(NDims);
+        _NDims           = view._NDims;
+        _shape           = view._shape;
+        _strides         = view._strides;
+        _mem_offset      = view._mem_offset;
+        _is_partial_view = view._is_partial_view;
     }
 
     Tensor<TElem> viewWithNDimsOnTheLeft(const size_t NDims) const
@@ -956,7 +962,11 @@ public:
             }
         }
 
-        Tensor<TElem> this_view  = viewFromIndices({-other.NDims()});
+        long ref_axis = -other.NDims();
+        if(other.isScalar()) {
+            ref_axis = NDims();
+        }
+        Tensor<TElem> this_view  = viewFromIndices({ref_axis});
         Tensor<TElem> other_view = other.viewWithNDimsOnTheLeft(1);
 
         for(size_t i = 0; i < this_view.shape(0); i++) {
@@ -999,6 +1009,38 @@ public:
         });
     }
 
+    Tensor& operator+=(const TElem& a)
+    {
+        Tensor<TElem> tmp;
+        tmp() = a;
+        (*this) += tmp;
+        return *this;
+    }
+
+    Tensor& operator-=(const TElem& a)
+    {
+        Tensor<TElem> tmp;
+        tmp() = a;
+        (*this) -= tmp;
+        return *this;
+    }
+
+    Tensor& operator*=(const TElem& a)
+    {
+        Tensor<TElem> tmp;
+        tmp() = a;
+        (*this) *= tmp;
+        return *this;
+    }
+
+    Tensor& operator/=(const TElem& a)
+    {
+        Tensor<TElem> tmp;
+        tmp() = a;
+        (*this) /= tmp;
+        return *this;
+    }
+
     template<typename TElemB>
     friend Tensor<TElem> operator+(const Tensor<TElem>& a, const Tensor<TElemB>& b)
     {
@@ -1031,7 +1073,77 @@ public:
         });
     }
 
-    size_t size() { return NElems(); }
+    friend Tensor<TElem> operator+(const Tensor<TElem>& a, const TElem& b)
+    {
+        Tensor<TElem> tmp;
+        tmp() = b;
+        return elementWiseCombination(a, tmp, [](TElem a, TElem b) {
+            return a + b;
+        });
+    }
+
+    friend Tensor<TElem> operator+(const TElem& a, const Tensor<TElem>& b)
+    {
+        Tensor<TElem> tmp;
+        tmp() = a;
+        return elementWiseCombination(tmp, b, [](TElem a, TElem b) {
+            return a + b;
+        });
+    }
+
+    friend Tensor<TElem> operator-(const Tensor<TElem>& a, const TElem& b)
+    {
+        Tensor<TElem> tmp;
+        tmp() = b;
+        return elementWiseCombination(a, tmp, [](TElem a, TElem b) {
+            return a - b;
+        });
+    }
+
+    friend Tensor<TElem> operator-(const TElem& a, const Tensor<TElem>& b)
+    {
+        Tensor<TElem> tmp;
+        tmp() = a;
+        return elementWiseCombination(tmp, b, [](TElem a, TElem b) {
+            return a - b;
+        });
+    }
+
+    friend Tensor<TElem> operator*(const Tensor<TElem>& a, const TElem& b)
+    {
+        Tensor<TElem> tmp;
+        tmp() = b;
+        return elementWiseCombination(a, tmp, [](TElem a, TElem b) {
+            return a * b;
+        });
+    }
+
+    friend Tensor<TElem> operator*(const TElem& a, const Tensor<TElem>& b)
+    {
+        Tensor<TElem> tmp;
+        tmp() = a;
+        return elementWiseCombination(tmp, b, [](TElem a, TElem b) {
+            return a * b;
+        });
+    }
+
+    friend Tensor<TElem> operator/(const Tensor<TElem>& a, const TElem& b)
+    {
+        Tensor<TElem> tmp;
+        tmp() = b;
+        return elementWiseCombination(a, tmp, [](TElem a, TElem b) {
+            return a / b;
+        });
+    }
+
+    friend Tensor<TElem> operator/(const TElem& a, const Tensor<TElem>& b)
+    {
+        Tensor<TElem> tmp;
+        tmp() = a;
+        return elementWiseCombination(tmp, b, [](TElem a, TElem b) {
+            return a / b;
+        });
+    }
 
     std::vector<uint8_t> toByteArray() const
     {
@@ -1134,9 +1246,14 @@ Tensor<TElemA> elementWiseCombination(const Tensor<TElemA>& a, const Tensor<TEle
     }
 
     if(a.NDims() > b.NDims()) {
+
+        long ref_axis = -b.NDims();
+        if(b.isScalar()) {
+            ref_axis = a.NDims();
+        }
         Tensor<TElemA> out(a.shape());
-        Tensor<TElemA> out_view = out.viewFromIndices({-b.NDims()});
-        Tensor<TElemA> a_view   = a.viewFromIndices({-b.NDims()});
+        Tensor<TElemA> out_view = out.viewFromIndices({ref_axis});
+        Tensor<TElemA> a_view   = a.viewFromIndices({ref_axis});
         Tensor<TElemB> b_view   = b.viewWithNDimsOnTheLeft(1);
 
         for(size_t i = 0; i < a_view.shape(0); i++) {
@@ -1147,9 +1264,14 @@ Tensor<TElemA> elementWiseCombination(const Tensor<TElemA>& a, const Tensor<TEle
         return out;
     }
     else {
+        long ref_axis = -a.NDims();
+        if(a.isScalar()) {
+            ref_axis = b.NDims();
+        }
+
         Tensor<TElemA> out(b.shape());
-        Tensor<TElemA> out_view = out.viewFromIndices({-a.NDims()});
-        Tensor<TElemB> b_view   = b.viewFromIndices({-a.NDims()});
+        Tensor<TElemA> out_view = out.viewFromIndices({ref_axis});
+        Tensor<TElemB> b_view   = b.viewFromIndices({ref_axis});
         Tensor<TElemA> a_view   = a.viewWithNDimsOnTheLeft(1);
 
         for(size_t i = 0; i < b_view.shape(0); i++) {

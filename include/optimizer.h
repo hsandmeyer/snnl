@@ -49,8 +49,11 @@ class SGDOptimizer : public Optimizer<TElem>
 
     virtual void optimizeGrad(Node<TElem>& weight, std::vector<Tensor<TElem>>&) override
     {
-        for(size_t ind = 0; ind < weight.shapeFlattened(-1); ind++) {
-            weight.value(ind) = weight.value(ind) - _learning_rate * weight.grad(ind);
+        auto weight_vals = weight.values().flatten();
+        auto weight_grad = weight.gradient().flatten();
+
+        for(size_t ind = 0; ind < weight_vals.size(); ind++) {
+            weight_vals(ind) = weight_vals(ind) - _learning_rate * weight_grad(ind);
         }
     }
 

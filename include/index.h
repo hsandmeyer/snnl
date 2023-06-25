@@ -112,7 +112,7 @@ public:
 
     void setNDims(size_t NDims) { _shape.resize(NDims); }
 
-    size_t NDims() const { return _shape.size(); }
+    long NDims() const { return _shape.size(); }
 
     bool operator!=(const Index& b) const { return _shape != b._shape; }
 

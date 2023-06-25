@@ -112,10 +112,11 @@ TEST_P(Tensor3DTest, size)
         }
         i++;
     }
-    Tensor<int> t2 = t;
+    Tensor<int> t2      = t.copy();
+    auto        t2_view = t2.flatten();
 
-    for(size_t i = 0; i < t2.shapeFlattened(-1); i++) {
-        t2(i) *= 2;
+    for(size_t i = 0; i < t2_view.size(); i++) {
+        t2_view(i) *= 2;
     }
 
     i = 0;
@@ -127,11 +128,12 @@ TEST_P(Tensor3DTest, size)
         i++;
     }
 
-    Tensor<int> t3 = t;
+    Tensor<int> t3      = t.copy();
+    auto        t3_view = t3.viewWithNDimsOnTheRight(2);
 
-    for(size_t i = 0; i < t3.shapeFlattened(-2); i++) {
-        for(size_t j = 0; j < t3.shape(-1); j++) {
-            t3(i, j) *= 2;
+    for(size_t i = 0; i < t3_view.shape(-2); i++) {
+        for(size_t j = 0; j < t3_view.shape(-1); j++) {
+            t3_view(i, j) *= 2;
         }
     }
 
@@ -173,10 +175,11 @@ TEST_P(Tensor4DTest, size)
         }
         i++;
     }
-    Tensor<int> t2 = t;
+    Tensor<int> t2      = t.copy();
+    auto        t2_view = t2.flatten();
 
-    for(size_t i = 0; i < t2.shapeFlattened(-1); i++) {
-        t2(i) *= 2;
+    for(size_t i = 0; i < t2.size(); i++) {
+        t2_view(i) *= 2;
     }
 
     i = 0;
@@ -188,11 +191,12 @@ TEST_P(Tensor4DTest, size)
         i++;
     }
 
-    Tensor<int> t3 = t;
+    Tensor<int> t3      = t.copy();
+    auto        t3_view = t3.viewWithNDimsOnTheRight(2);
 
-    for(size_t i = 0; i < t3.shapeFlattened(-2); i++) {
-        for(size_t j = 0; j < t3.shape(-1); j++) {
-            t3(i, j) *= 2;
+    for(size_t i = 0; i < t3_view.shape(-2); i++) {
+        for(size_t j = 0; j < t3_view.shape(-1); j++) {
+            t3_view(i, j) *= 2;
         }
     }
 
@@ -205,12 +209,13 @@ TEST_P(Tensor4DTest, size)
         i++;
     }
 
-    Tensor<int> t4 = t;
+    Tensor<int> t4      = t.copy();
+    auto        t4_view = t4.viewWithNDimsOnTheRight(3);
 
-    for(size_t i = 0; i < t4.shapeFlattened(1); i++) {
-        for(size_t j = 0; j < t4.shape(-2); j++) {
-            for(size_t k = 0; k < t4.shape(-1); k++) {
-                t4(i, j, k) *= 2;
+    for(size_t i = 0; i < t4_view.shape(0); i++) {
+        for(size_t j = 0; j < t4_view.shape(-2); j++) {
+            for(size_t k = 0; k < t4_view.shape(-1); k++) {
+                t4_view(i, j, k) *= 2;
             }
         }
     }
@@ -490,11 +495,12 @@ TEST(ViewTest, ShrinkToAxis)
 TEST(OperatorTest, BroadCasting)
 {
     Tensor<int> a({2});
+
     a.setFlattenedValues({2, 3});
 
     Tensor<int> b({2, 2});
     b.setFlattenedValues({1, 2, 3, 4});
-    Tensor tmp = b;
+    Tensor tmp = b.copy();
 
     b *= a;
     for(size_t i = 0; i < b.shape(0); ++i) {
@@ -546,13 +552,63 @@ TEST(OperatorTest, BroadCasting)
             }
         }
     }
+
+    {
+        Tensor<int> t{2, 2, 2};
+        auto        t_view = t.flatten();
+        t_view.arangeAlongAxis(0, 0, 8);
+
+        t *= 2;
+        for(size_t i = 0; i < t.flatten().size(); i++) {
+            EXPECT_EQ(t.flatten()(i), 2 * i);
+        }
+
+        t_view.arangeAlongAxis(0, 0, 8);
+        t = 2 * t;
+
+        for(size_t i = 0; i < t.flatten().size(); i++) {
+            EXPECT_EQ(t.flatten()(i), 2 * i);
+        }
+
+        t_view.arangeAlongAxis(0, 0, 8);
+        t = t * 2;
+
+        for(size_t i = 0; i < t.flatten().size(); i++) {
+            EXPECT_EQ(t.flatten()(i), i * 2);
+        }
+    }
+
+    {
+        Tensor<int> t{2, 2, 2};
+        auto        t_view = t.flatten();
+        t_view.arangeAlongAxis(0, 0, 8);
+
+        t /= 2;
+        for(size_t i = 0; i < t.flatten().size(); i++) {
+            EXPECT_EQ(t.flatten()(i), i / 2);
+        }
+
+        t_view.arangeAlongAxis(0, 0, 8);
+        t = t / 2;
+
+        for(size_t i = 0; i < t.flatten().size(); i++) {
+            EXPECT_EQ(t.flatten()(i), i / 2);
+        }
+
+        t_view.arangeAlongAxis(0, 1, 9);
+        t = 2 / t;
+
+        for(size_t i = 0; i < t.flatten().size(); i++) {
+            EXPECT_EQ(t.flatten()(i), 2 / (i + 1));
+        }
+    }
 }
 
 TEST(PartialViewTest, TestDims)
 {
     {
         Tensor<float> source{4, 3, 2};
-        auto          view = source.partialView(range(Full{}, 2), range(1, 3), ellipsis());
+        auto          view = source.viewAs(range(Full{}, 2), range(1, 3), ellipsis());
         Tensor<float> to_assign{2, 2, 2};
         // std::cout << "Source " << source << std::endl;
         // std::cout << "View " << view << std::endl;
@@ -600,7 +656,7 @@ TEST(PartialViewTest, TestDims)
 
     {
         Tensor<float> source{4, 3, 2};
-        auto          view = source.partialView(1, all(), ellipsis());
+        auto          view = source.viewAs(1, all(), ellipsis());
         Tensor<float> to_assign{3, 2};
         // std::cout << "Source " << source << std::endl;
         // std::cout << "View " << view << std::endl;
@@ -648,7 +704,7 @@ TEST(PartialViewTest, TestDims)
 
     {
         Tensor<float> source{4, 3, 2};
-        auto          view = source.partialView(1, ellipsis());
+        auto          view = source.viewAs(1, ellipsis());
         Tensor<float> to_assign{3, 2};
         // std::cout << "Source " << source << std::endl;
         // std::cout << "View " << view << std::endl;
@@ -696,7 +752,7 @@ TEST(PartialViewTest, TestDims)
 
     {
         Tensor<float> source{4, 3, 2};
-        auto          view = source.partialView(ellipsis(), range(0, 1));
+        auto          view = source.viewAs(ellipsis(), range(0, 1));
         Tensor<float> to_assign{4, 3, 1};
         // std::cout << "Source " << source << std::endl;
         // std::cout << "View " << view << std::endl;
@@ -743,8 +799,8 @@ TEST(PartialViewTest, TestDims)
     }
     {
         Tensor<float> source{3, 3};
-        auto view = source.partialView(newAxis(), newAxis(), ellipsis(), newAxis(), range(0, 2),
-                                       newAxis(), NewAxis());
+        auto          view = source.viewAs(newAxis(), newAxis(), ellipsis(), newAxis(), range(0, 2),
+                                           newAxis(), NewAxis());
         EXPECT_EQ(view.shape(), Index({1, 1, 3, 1, 2, 1, 1}));
         view.setAllValues(2);
 

@@ -67,7 +67,7 @@ int main()
             correct = Sin(input);
             correct->disconnect();
 
-            for(size_t ind = 0; ind < input->values().shapeFlattened(-1); ++ind) {
+            for(size_t ind = 0; ind < input->values().shape(0); ++ind) {
                 fout << input->value(ind, 0) << " " << correct->value(ind, 0) << " "
                      << out->value(ind, 0) << std::endl;
             }

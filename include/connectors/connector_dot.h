@@ -110,8 +110,8 @@ class DotConnector : public Connector<TElem>
         }
 
         // Matrix product for arbitrary dimensions a la numpy.dot
-        auto a_view = a.view();
-        auto b_view = b.view();
+        auto a_view = a;
+        auto b_view = b;
 
         if(a_view.NDims() <= 1) {
             // a is a vector. Make it a matrix
@@ -122,8 +122,8 @@ class DotConnector : public Connector<TElem>
             b_view.appendAxis();
         }
 
-        a_view = a_view.viewWithNDimsOnTheRight(2);
-        b_view = b_view.viewWithNDimsOnTheRight(3);
+        a_view.adjustToNDimsOnTheRight(2);
+        b_view.adjustToNDimsOnTheRight(3);
 
         Index out_view_shape(3);
 
@@ -156,19 +156,21 @@ class DotConnector : public Connector<TElem>
         auto& grad_b = input_nodes.at(1)->gradient();
 
         if(a.isScalar() && !b.isScalar()) {
+            auto out_grad_view = output_grad.flatten();
             // scalar times vector/matrix
-            for(size_t i = 0; i < output_grad.shapeFlattened(-1); i++) {
-                grad_a() += b(i) * output_grad(i);
-                grad_b(i) += a() * output_grad(i);
+            for(size_t i = 0; i < out_grad_view.size(); i++) {
+                grad_a() += b(i) * out_grad_view(i);
+                grad_b(i) += a() * out_grad_view(i);
             }
             return;
         }
 
         if(b.isScalar() && !a.isScalar()) {
             // vector times scalar/matrix
-            for(size_t i = 0; i < output_grad.shapeFlattened(-1); i++) {
-                grad_a(i) += b() * output_grad(i);
-                grad_b() += a(i) * output_grad(i);
+            auto out_grad_view = output_grad.flatten();
+            for(size_t i = 0; i < out_grad_view.size(); i++) {
+                grad_a(i) += b() * out_grad_view(i);
+                grad_b() += a(i) * out_grad_view(i);
             }
             return;
         }
@@ -180,10 +182,10 @@ class DotConnector : public Connector<TElem>
             return;
         }
 
-        auto a_view      = a.view();
-        auto b_view      = b.view();
-        auto a_grad_view = grad_a.view();
-        auto b_grad_view = grad_b.view();
+        auto a_view      = a;
+        auto b_view      = b;
+        auto a_grad_view = grad_a;
+        auto b_grad_view = grad_b;
 
         if(a_view.NDims() <= 1) {
             a_view.prependAxis();
@@ -194,11 +196,11 @@ class DotConnector : public Connector<TElem>
             b_grad_view.appendAxis();
         }
 
-        a_view = a_view.viewWithNDimsOnTheRight(2);
-        b_view = b_view.viewWithNDimsOnTheRight(3);
+        a_view.adjustToNDimsOnTheRight(2);
+        b_view.adjustToNDimsOnTheRight(3);
 
-        a_grad_view = a_grad_view.viewWithNDimsOnTheRight(2);
-        b_grad_view = b_grad_view.viewWithNDimsOnTheRight(3);
+        a_grad_view.adjustToNDimsOnTheRight(2);
+        b_grad_view.adjustToNDimsOnTheRight(3);
 
         Index out_view_shape(3);
 

@@ -160,17 +160,13 @@ int main()
     // You need to extract the mnist data and put them into the root folder of the repo
     // (Assuming you work at snnl/build)
     auto train_images = read_mnist_images("../train-images.idx3-ubyte");
-    for(auto& val : train_images) {
-        val /= 255.f;
-    }
+    train_images /= 255.f;
     train_images.saveToBMP("train.bmp", 0, 1);
 
     auto train_labels = read_mnist_labels("../train-labels.idx1-ubyte");
 
     auto test_images = read_mnist_images("../t10k-images.idx3-ubyte");
-    for(auto& val : test_images) {
-        val /= 255.f;
-    }
+    test_images /= 255.f;
     test_images.saveToBMP("test.bmp", 0, 1);
 
     auto test_labels = read_mnist_labels("../t10k-labels.idx1-ubyte");
@@ -200,16 +196,10 @@ int main()
         for(size_t i = 0; i < batch_size; i++) {
             auto random_index = chooser_train(rng);
 
-            auto input_view = input_images->values().partialView(i, ellipsis());
-            auto train_view = train_images.partialView(random_index, ellipsis());
-            input_view      = train_view;
+            input_images->values().viewAs(i, ellipsis()) =
+                train_images.viewAs(random_index, ellipsis());
 
-            double label           = train_labels(random_index);
-            input_labels->value(i) = label;
-        }
-        double maxVal = 0;
-        for(auto& val : input_images->values()) {
-            maxVal = std::max(val, maxVal);
+            input_labels->value(i) = train_labels(random_index);
         }
 
         NodeShPtr<double> encoding = model.call(input_images, input_labels);
@@ -228,14 +218,12 @@ int main()
 
             auto test_index = chooser_test(rng);
 
-            auto test_view = test_images.partialView(test_index, ellipsis());
-            test_image->values().partialView(0, ellipsis()) = test_view;
-
-            test_label->value(0, 0) = test_labels(test_index);
+            test_image->values().viewAs(0, ellipsis()) = test_images.viewAs(test_index, ellipsis());
+            test_label->value(0, 0)                    = test_labels(test_index);
 
             auto test_encoding = model.call(test_image);
 
-            auto encoding_view = test_encoding->values().partialView(0, all());
+            auto encoding_view = test_encoding->values().viewAs(0, all());
 
             double max       = 0;
             size_t max_index = 0;

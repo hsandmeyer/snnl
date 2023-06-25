@@ -89,8 +89,6 @@ public:
         return _gradient(args...);
     }
 
-    size_t shapeFlattened(int i) const { return _values.shapeFlattened(i); }
-
     void setAllValues(const TElem& elem) { _values.setAllValues(elem); }
 
     void setAllGrad(const TElem& grad) { _gradient.setAllValues(grad); }
@@ -202,7 +200,7 @@ public:
 
     void setWeight(bool val) { _is_weight = val; }
 
-    size_t NDims() const { return _values.NDims(); }
+    long NDims() const { return _values.NDims(); }
 
     void disconnect()
     {
