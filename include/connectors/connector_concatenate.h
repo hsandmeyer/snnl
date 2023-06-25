@@ -10,10 +10,8 @@ template<class TElem>
 class ConcatenateConnector : public Connector<TElem>
 {
 
-    /* Fully analog implementation of np.dot*/
-
     friend class Connector<TElem>;
-    long _axis = 0;
+    long _axis = -1;
 
     void dimChecks(const std::vector<NodeShPtr<TElem>>& input_nodes) const
     {
@@ -23,8 +21,12 @@ class ConcatenateConnector : public Connector<TElem>
             if(input_nodes.at(i)->NDims() != shape.NDims()) {
                 throw std::invalid_argument("Concatenate: Dimension mismatch");
             }
+            long axis = _axis;
+            if(axis < 0) {
+                axis += shape.NDims();
+            }
             for(long dim_ind = 0; dim_ind < static_cast<long>(shape.NDims()); dim_ind++) {
-                if(dim_ind != _axis && shape[dim_ind] != input_nodes.at(i)->shape(dim_ind)) {
+                if(dim_ind != axis && shape[dim_ind] != input_nodes.at(i)->shape(dim_ind)) {
                     throw std::invalid_argument(
                         "Concatenate: shape mismatch:" + input_nodes.at(0)->shape() + " vs " +
                         input_nodes.at(1)->shape());
@@ -51,6 +53,9 @@ class ConcatenateConnector : public Connector<TElem>
     void forwardHandler(const std::vector<NodeShPtr<TElem>>& input_nodes,
                         Node<TElem>*                         output_node) override
     {
+        if(_axis < 0) {
+            _axis += output_node->NDims();
+        }
         auto out_view = output_node->values().viewFromIndices({_axis, _axis + 1});
 
         size_t offset = 0;
@@ -73,6 +78,9 @@ class ConcatenateConnector : public Connector<TElem>
     void backwardHandler(const Node<TElem>*             output_node,
                          std::vector<NodeShPtr<TElem>>& input_nodes) override
     {
+        if(_axis < 0) {
+            _axis += output_node->NDims();
+        }
         auto out_grad_view = output_node->gradient().viewFromIndices({_axis, _axis + 1});
 
         size_t offset = 0;
@@ -93,7 +101,7 @@ class ConcatenateConnector : public Connector<TElem>
     }
 
 public:
-    ConcatenateConnector(long axis = 0)
+    ConcatenateConnector(long axis = -1)
         : _axis(axis)
     {
     }
@@ -102,7 +110,7 @@ public:
 };
 
 template<class TElem>
-NodeShPtr<TElem> Concatenate(const NodeShPtr<TElem>& a, const NodeShPtr<TElem>& b, long axis = 0)
+NodeShPtr<TElem> Concatenate(const NodeShPtr<TElem>& a, const NodeShPtr<TElem>& b, long axis = -1)
 {
     auto conn = Connector<TElem>::template create<ConcatenateConnector>(axis);
     return conn->call(a, b);

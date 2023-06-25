@@ -97,7 +97,7 @@ template<class TElem>
 using ReLuConnector = ElementWiseConnector<TElem, CalcReLu>;
 
 template<class TElem>
-NodeShPtr<TElem> ReLu(const NodeShPtr<TElem>& node)
+NodeShPtr<TElem> ReLU(const NodeShPtr<TElem>& node)
 {
     return Connector<TElem>::template apply<ReLuConnector>(node);
 }

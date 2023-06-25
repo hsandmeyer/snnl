@@ -1,9 +1,5 @@
 #include "common_connectors.h"
-#include "connectors/connector_combine.h"
 #include "connectors/connector_concatenate.h"
-#include "connectors/connector_cross_entropy.h"
-#include "connectors/connector_functions.h"
-#include "connectors/connector_softmax.h"
 #include "forward_declare.h"
 #include "module.h"
 #include "modules/module_conv2d.h"
@@ -28,7 +24,7 @@ void compRel(const Index& pos, TElem a, TElem b, TElem rel_prec, TElem abs_prec 
 }
 
 void test_node_grad(Node<double>& node, Module<double>& model,
-                    std::vector<NodeShPtr<double>>& inputs)
+                    std::vector<NodeShPtr<double>>& inputs, double prec = 1e-4)
 {
 
     node.values().forEach([&](const Index& index) {
@@ -52,15 +48,15 @@ void test_node_grad(Node<double>& node, Module<double>& model,
 
         double grad = node.grad(index);
 
-        compRel(index, double(numerical_grad), double(grad), 1e-4);
+        compRel(index, double(numerical_grad), double(grad), prec);
     });
 }
 
-void test_grad(Module<double>& model, std::vector<NodeShPtr<double>> inputs)
+void test_grad(Module<double>& model, std::vector<NodeShPtr<double>> inputs, double prec = 1e-4)
 {
     auto loss = model.call(inputs);
     loss->iterateWeights([&](Node<double>& weight) {
-        test_node_grad(weight, model, inputs);
+        test_node_grad(weight, model, inputs, prec);
     });
 }
 
@@ -180,17 +176,17 @@ TEST(BackwardTests, ComplexGraph)
             auto tmp_1_0 = dense->call(Sin(inputs[0]));
             tmp_1_0      = Sigmoid(tmp_1_0);
 
-            // Reuse same callor
+            // Reuse same caller
             auto tmp_1_1 = dense->call(tmp_1_0);
             tmp_1_1      = Sigmoid(tmp_1_1);
 
-            // Reuse same callor on other input
+            // Reuse same caller on other input
             auto tmp_2_0 = dense->call(Sin(inputs[1]));
             tmp_2_0      = Sigmoid(tmp_2_0);
 
-            // Skip callion by addition
+            // Skip connection by addition
             auto tmp_1_3 = Add(tmp_1_1, tmp_1_0);
-            // Another skip callion
+            // Another skip connection
             auto tmp_1_4 = Add(tmp_1_3, tmp_1_0);
 
             // combine two inputs
@@ -573,11 +569,11 @@ TEST(ImageTest, ImageTest)
             // std::cout << "Sigmoid " << tmp->values() << std::endl;
             tmp = AveragePooling(tmp, 4, 2);
             // std::cout << "Average " << tmp->values() << std::endl;
-            tmp = Upscale2D(tmp, 2, 4);
+            tmp = UpSample2D(tmp, 2, 4);
             // std::cout << "Upscale " << tmp->shape() << " " << tmp->values() << std::endl;
             tmp = conv2d_2->call(tmp);
             // std::cout << "conv " << tmp->shape() << " " << tmp->values() << std::endl;
-            tmp = ReLu(tmp);
+            tmp = ReLU(tmp);
             // std::cout << "ReLu" << tmp->values() << std::endl;
             tmp = Flatten(tmp);
             // std::cout << "Flatten " << tmp->values() << std::endl;
@@ -614,54 +610,82 @@ TEST(ImageTest, UNet)
         std::shared_ptr<Conv2DModule<double>> conv2d_1;
         std::shared_ptr<Conv2DModule<double>> conv2d_2;
         std::shared_ptr<Conv2DModule<double>> conv2d_3;
+        std::shared_ptr<Conv2DModule<double>> conv2d_4;
+        std::shared_ptr<Conv2DModule<double>> conv2d_5;
 
         ImageModel()
         {
-            conv2d_1 = this->addModule<Conv2DModule>(5, 5, 3, 32);
-            conv2d_2 = this->addModule<Conv2DModule>(3, 3, 32, 32);
-            conv2d_3 = this->addModule<Conv2DModule>(3, 3, 32, 3);
+            conv2d_1 = this->addModule<Conv2DModule>(3, 3, 3, 4);
+            conv2d_2 = this->addModule<Conv2DModule>(3, 3, 4, 8);
+            conv2d_3 = this->addModule<Conv2DModule>(3, 3, 8, 8);
+            conv2d_4 = this->addModule<Conv2DModule>(3, 3, 16, 4);
+            conv2d_5 = this->addModule<Conv2DModule>(3, 3, 8, 10);
         }
 
         virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
         {
-            // std::cout << "Input " << inputs.at(0)->values() << std::endl;
-            NodeShPtr<double> tmp = conv2d_1->call(inputs.at(0));
-            // std::cout << "Conv2d " << tmp->values() << std::endl;
-            tmp = Sigmoid(tmp);
-            // std::cout << "Sigmoid " << tmp->values() << std::endl;
-            tmp = AveragePooling(tmp, 4, 2);
-            // std::cout << "Average " << tmp->values() << std::endl;
-            tmp = Upscale2D(tmp, 2, 4);
-            // std::cout << "Upscale " << tmp->shape() << " " << tmp->values() << std::endl;
-            tmp = conv2d_2->call(tmp);
-            // std::cout << "conv " << tmp->shape() << " " << tmp->values() << std::endl;
-            tmp = ReLu(tmp);
-            // std::cout << "ReLu" << tmp->values() << std::endl;
-            tmp = Flatten(tmp);
-            // std::cout << "Flatten " << tmp->values() << std::endl;
-            return Sum(tmp);
+            // shape {batch, x, y, 3}
+            auto& images = inputs.at(0);
+            auto& labels = inputs.at(1);
+
+            // shape {batch, x, y, 4}
+            auto layer1 = conv2d_1->call(images);
+            layer1      = ReLU(layer1);
+
+            // shape {batch, x/2, y/2, 8}
+            auto layer2 = AveragePooling(layer1, 2, 2);
+            // shape {batch, x/2, y/2, 8}
+            layer2 = conv2d_2->call(layer2);
+            layer2 = ReLU(layer2);
+
+            // shape {batch, x/4, y/4, 8}
+            auto layer3 = AveragePooling(layer2, 2, 2);
+            // shape {batch, x/4, y/4, 8}
+            layer3 = conv2d_3->call(layer3);
+            layer3 = ReLU(layer3);
+
+            // shape {batch, x/2, y/2, 8}
+            auto layer4 = UpSample2D(layer3, 2, 2);
+            // shape {batch, x/2, y/2, 16}
+            layer4 = Concatenate(layer4, layer2);
+            // shape {batch, x/2, y/2, 4}
+            layer4 = conv2d_4->call(layer4);
+            layer4 = ReLU(layer4);
+
+            // shape {batch, x, y, 4}
+            auto layer5 = UpSample2D(layer4, 2, 2);
+            // shape {batch, x, y, 8}
+            layer5 = Concatenate(layer5, layer1);
+            // shape {batch, x, y, 10}
+            layer5 = conv2d_5->call(layer5);
+
+            auto logits = ReLU(layer5);
+
+            auto encoding = SoftMax(logits);
+
+            auto loss = SparseCategoricalCrosseEntropy(encoding, labels);
+
+            return loss;
         }
     };
 
     ImageModel model;
 
-    NodeShPtr<double> input_1 = Node<double>::create({10, 8, 3});
+    NodeShPtr<double> image  = Node<double>::create({4, 32, 16, 3});
+    NodeShPtr<double> labels = Node<double>::create({4, 32, 16});
 
-    input_1->values().uniform();
+    image->values().uniform();
 
-    auto res = model.call(input_1);
+    labels->values().uniform(-0.499, 9.499);
+    for(auto& val : labels->values()) {
+        val = std::round(val);
+    }
 
-    res->computeGrad();
-
-    test_grad(model, {input_1});
-
-    NodeShPtr<double> input_2 = Node<double>::create({9, 7, 3});
-    input_2->values().uniform();
-
-    res = model.call(input_2);
+    auto res = model.call(image, labels);
 
     res->computeGrad();
-    test_grad(model, {input_2});
+
+    test_grad(model, {image, labels}, 5e-2);
 }
 
 int main(int argc, char** argv)

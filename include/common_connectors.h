@@ -11,4 +11,4 @@
 #include "connectors/connector_mse.h"
 #include "connectors/connector_softmax.h"
 #include "connectors/connector_sum.h"
-#include "connectors/connector_upscaling.h"
+#include "connectors/connector_upsampling.h"

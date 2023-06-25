@@ -580,7 +580,6 @@ public:
     {
         size_t numNewAxis   = calcNumNewAxis(0, args...);
         size_t sizeEllipsis = NDims() - sizeof...(args) + numNewAxis + 1;
-        std::cout << sizeEllipsis << std::endl;
         return std::tuple(sizeEllipsis, numNewAxis);
     }
 

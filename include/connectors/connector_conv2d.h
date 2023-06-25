@@ -20,22 +20,26 @@ class Conv2DConnector : public Connector<TElem>
         auto& kernel = input_nodes.at(0);
 
         if(input->NDims() < 3) {
-            throw std::invalid_argument("Need at least three dimenions for input in conv2d-layer");
+            throw std::invalid_argument(
+                "Conv2D: Need at least three dimensions for input in conv2d-layer. Got " +
+                input->shape());
         }
         if(kernel->NDims() != 4) {
-            throw std::invalid_argument("Need exact four dimensions for kernel in conv2d-layer");
+            throw std::invalid_argument(
+                "Conv2D: Need exact four dimensions for kernel in conv2d-layer");
         }
         if(kernel->shape(0) % 2 != 1) {
-            throw std::invalid_argument("Only uneven dimensions for kernel allow");
+            throw std::invalid_argument("Conv2D: Only uneven dimensions for kernel allow");
         }
         if(kernel->shape(1) % 2 != 1) {
-            throw std::invalid_argument("Only uneven dimensions for kernel allowed");
+            throw std::invalid_argument("Conv2D: Only uneven dimensions for kernel allowed");
         }
         if(kernel->shape(-2) != input->shape(-1)) {
-            throw std::invalid_argument("Output numer of channels of input does not match number"
-                                        " of output dimensions of kernel (" +
-                                        std::to_string(kernel->shape(-2)) + " vs. " +
-                                        std::to_string(input->shape(-1)) + ")");
+            throw std::invalid_argument(
+                "Conv2D: Output numer of channels of input does not match number"
+                " of output dimensions of kernel (kernel:" +
+                std::to_string(kernel->shape(-2)) +
+                " vs. input:" + std::to_string(input->shape(-1)) + ")");
         }
     }
 

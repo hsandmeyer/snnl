@@ -1,4 +1,6 @@
 #include "common_modules.h"
+#include "connectors/connector_cross_entropy.h"
+#include "connectors/connector_softmax.h"
 #include "modules/module_dense.h"
 #include "node.h"
 #include "optimizer.h"
@@ -7,7 +9,7 @@
 
 using namespace snnl;
 
-Tensor<float> read_mnist_images(std::string full_path)
+Tensor<double> read_mnist_images(std::string full_path)
 {
     auto reverseInt = [](int i) {
         unsigned char c1, c2, c3, c4;
@@ -38,8 +40,8 @@ Tensor<float> read_mnist_images(std::string full_path)
 
         image_size = n_rows * n_cols;
 
-        Tensor<float> out = {number_of_images, n_rows, n_cols, 1};
-        uchar         image[image_size];
+        Tensor<double> out = {number_of_images, n_rows, n_cols, 1};
+        uchar          image[image_size];
         for(int i = 0; i < number_of_images; i++) {
             file.read((char*)image, image_size);
             for(size_t row = 0; row < size_t(n_rows); row++) {
@@ -55,7 +57,7 @@ Tensor<float> read_mnist_images(std::string full_path)
     }
 }
 
-Tensor<float> read_mnist_labels(std::string full_path)
+Tensor<double> read_mnist_labels(std::string full_path)
 {
     auto reverseInt = [](int i) {
         unsigned char c1, c2, c3, c4;
@@ -84,7 +86,7 @@ Tensor<float> read_mnist_labels(std::string full_path)
         for(int i = 0; i < number_of_labels; i++) {
             file.read((char*)&data[i], 1);
         }
-        Tensor<float> out{number_of_labels};
+        Tensor<double> out{number_of_labels};
         for(int i = 0; i < number_of_labels; i++) {
             out(i) = data[i];
         }
@@ -95,81 +97,164 @@ Tensor<float> read_mnist_labels(std::string full_path)
     }
 }
 
-struct MNistModel : public Module<float>
+struct MNistModel : public Module<double>
 {
-    DenseModuleShPtr<float> dense1;
-    DenseModuleShPtr<float> dense2;
-    DenseModuleShPtr<float> dense3;
 
-    MNistModel()
+    size_t _image_height;
+    size_t _image_width;
+
+    std::shared_ptr<Conv2DModule<double>> conv2d_1;
+    std::shared_ptr<Conv2DModule<double>> conv2d_2;
+    std::shared_ptr<Conv2DModule<double>> conv2d_3;
+    std::shared_ptr<Conv2DModule<double>> conv2d_4;
+    DenseModuleShPtr<double>              dense_1;
+
+    MNistModel(size_t image_height, size_t image_width)
+        : _image_height(image_height)
+        , _image_width(image_width)
     {
-        dense1 = addModule<DenseModule>(1, 64);
-        dense2 = addModule<DenseModule>(64, 16);
-        dense3 = addModule<DenseModule>(16, 1);
+        conv2d_1 = this->addModule<Conv2DModule>(3, 3, 1, 16);
+        conv2d_2 = this->addModule<Conv2DModule>(3, 3, 16, 32);
+        conv2d_3 = this->addModule<Conv2DModule>(3, 3, 32, 64);
+        dense_1  = addModule<DenseModule>(64 * image_height / 4 * image_width / 4, 10);
     }
 
-    virtual NodeShPtr<float> callHandler(std::vector<NodeShPtr<float>> input) override
+    virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
     {
-        NodeShPtr<float> out = dense1->call(input);
-        out                  = Sigmoid(out);
-        out                  = dense2->call(out);
-        out                  = Sigmoid(out);
-        out                  = dense3->call(out);
-        return out;
+
+        auto& images = inputs.at(0);
+
+        // std::cout << "images " << images->shape() << std::endl;
+
+        auto layer1 = conv2d_1->call(images);
+        layer1      = ReLU(layer1);
+
+        // std::cout << "layer1 " << layer1->shape() << std::endl;
+
+        auto layer2 = AveragePooling(layer1, 2, 2);
+        layer2      = conv2d_2->call(layer2);
+        layer2      = ReLU(layer2);
+
+        // std::cout << "layer2 " << layer2->shape() << std::endl;
+
+        auto layer3 = AveragePooling(layer2, 2, 2);
+        layer3      = conv2d_3->call(layer3);
+        layer3      = ReLU(layer3);
+        // std::cout << "layer3 " << layer3->shape() << std::endl;
+
+        layer3 = Flatten(layer3);
+        // std::cout << "layer3 flattened " << layer3->shape() << std::endl;
+
+        auto logits = dense_1->call(layer3);
+        // std::cout << "logits " << logits->shape() << std::endl;
+
+        auto encoding = SoftMax(logits);
+        // std::cout << "encoding " << encoding->shape() << std::endl;
+
+        return encoding;
     }
 };
 
 int main()
 {
-    auto images = read_mnist_images("../train-images.idx3-ubyte");
-    images.saveToBMP("test.bmp");
+    // You need to extract the mnist data and put them into the root folder of the repo
+    // (Assuming you work at snnl/build)
+    auto train_images = read_mnist_images("../train-images.idx3-ubyte");
+    for(auto& val : train_images) {
+        val /= 255.f;
+    }
+    train_images.saveToBMP("train.bmp", 0, 1);
 
-    auto labels = read_mnist_labels("../train-labels.idx1-ubyte");
-    std::cout << labels(2) << std::endl;
+    auto train_labels = read_mnist_labels("../train-labels.idx1-ubyte");
 
-    /*
-    size_t           batch_size = 4;
-    NodeShPtr<float> input      = Node<float>::create({batch_size, 1});
-    MNistModel       model;
+    auto test_images = read_mnist_images("../t10k-images.idx3-ubyte");
+    for(auto& val : test_images) {
+        val /= 255.f;
+    }
+    test_images.saveToBMP("test.bmp", 0, 1);
 
-    SGDOptimizer<float> optimizer(1e-1);
+    auto test_labels = read_mnist_labels("../t10k-labels.idx1-ubyte");
+
+    size_t image_height = train_images.shape(1);
+    size_t image_width  = train_images.shape(2);
+
+    size_t            batch_size = 4;
+    NodeShPtr<double> input_images =
+        Node<double>::create({batch_size, image_width, image_height, 1});
+    NodeShPtr<double> input_labels = Node<double>::create({batch_size});
+
+    MNistModel model(image_height, image_width);
+
+    std::random_device dev;
+    std::mt19937       rng(dev());
+
+    std::uniform_int_distribution<std::mt19937::result_type> chooser_train(
+        0, train_images.shape(0) - 1);
+    std::uniform_int_distribution<std::mt19937::result_type> chooser_test(0,
+                                                                          test_images.shape(0) - 1);
+
+    SGDOptimizer<double> optimizer(1e-1);
 
     for(size_t step = 0; step < 100000; step++) {
-        input->values().uniform(-M_PI, M_PI);
 
-        auto correct = Sin(input);
-        correct->disconnect();
+        for(size_t i = 0; i < batch_size; i++) {
+            auto random_index = chooser_train(rng);
 
-        NodeShPtr<float> out  = model.call(input);
-        NodeShPtr<float> loss = MSE(correct, out);
+            auto input_view = input_images->values().partialView(i, ellipsis());
+            auto train_view = train_images.partialView(random_index, ellipsis());
+            input_view      = train_view;
+
+            double label           = train_labels(random_index);
+            input_labels->value(i) = label;
+        }
+        double maxVal = 0;
+        for(auto& val : input_images->values()) {
+            maxVal = std::max(val, maxVal);
+        }
+
+        NodeShPtr<double> encoding = model.call(input_images, input_labels);
+
+        auto loss = SparseCategoricalCrosseEntropy(encoding, input_labels);
 
         loss->computeGrad();
 
         optimizer.optimizeStep(loss);
 
-        if(step % 500 == 0) {
-            // std::cout << model.dense1->B()->values();
-
+        if(step % 50 == 0) {
             std::cout << "Loss = " << loss->value(0) << std::endl;
-            std::cout << "Diff =\n" << out->values() - correct->values() << " " << std::endl;
 
-            std::ofstream fout("test.txt");
+            NodeShPtr<double> test_image = Node<double>::create({1, image_width, image_height, 1});
+            NodeShPtr<double> test_label = Node<double>::create({1, 1});
 
-            input->setDims({100, 1});
-            input->values().arangeAlongAxis(0, -M_PI, M_PI);
-            out = model.call(input);
+            auto test_index = chooser_test(rng);
 
-            correct = Sin(input);
-            correct->disconnect();
+            auto test_view = test_images.partialView(test_index, ellipsis());
+            test_image->values().partialView(0, ellipsis()) = test_view;
 
-            for(size_t ind = 0; ind < input->values().shapeFlattened(-1); ++ind) {
-                fout << input->value(ind, 0) << " " << correct->value(ind, 0) << " "
-                     << out->value(ind, 0) << std::endl;
+            test_label->value(0, 0) = test_labels(test_index);
+
+            auto test_encoding = model.call(test_image);
+
+            auto encoding_view = test_encoding->values().partialView(0, all());
+
+            double max       = 0;
+            size_t max_index = 0;
+            for(size_t i = 0; i < encoding_view.shape(0); i++) {
+                if(max < encoding_view(i)) {
+                    max_index = i;
+                    max       = encoding_view(i);
+                }
             }
 
-            input->setDims({batch_size, 1});
-            correct->setDims({batch_size, 1});
+            std::cout << "Correct label\t= " << test_label->value(0)
+                      << "\nChosen \t\t= " << max_index << " with "
+                      << test_encoding->value(max_index)
+                      << "\nEncoding = " << test_encoding->values() << std::endl;
+            if(size_t(test_label->value(0)) != max_index) {
+                test_image->values().saveToBMP(std::to_string(max_index) + ".bmp", 0, 1);
+            }
+
+            model.saveToFile("mnist.snnl");
         }
     }
-    */
 }

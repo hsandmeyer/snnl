@@ -23,7 +23,8 @@ public:
 
         if(input_nodes[0]->shape(-2) != input_nodes[1]->shape(-1)) {
             throw std::invalid_argument("SparseCrossEntropyConnector: Dimensions of the input "
-                                        "nodes do not match correctly");
+                                        "nodes do not match correctly. " +
+                                        input_nodes[0]->shape() + " " + input_nodes[1]->shape());
         }
         return Index{1};
     }
