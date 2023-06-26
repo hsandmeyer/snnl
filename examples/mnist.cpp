@@ -5,11 +5,13 @@
 #include "node.h"
 #include "optimizer.h"
 #include "tensor.h"
+#include <cmath>
 #include <fstream>
+#include <stdexcept>
 
 using namespace snnl;
 
-Tensor<double> read_mnist_images(std::string full_path)
+Tensor<float> read_mnist_images(std::string full_path)
 {
     auto reverseInt = [](int i) {
         unsigned char c1, c2, c3, c4;
@@ -40,8 +42,8 @@ Tensor<double> read_mnist_images(std::string full_path)
 
         image_size = n_rows * n_cols;
 
-        Tensor<double> out = {number_of_images, n_rows, n_cols, 1};
-        uchar          image[image_size];
+        Tensor<float> out = {number_of_images, n_rows, n_cols, 1};
+        uchar         image[image_size];
         for(int i = 0; i < number_of_images; i++) {
             file.read((char*)image, image_size);
             for(size_t row = 0; row < size_t(n_rows); row++) {
@@ -57,7 +59,7 @@ Tensor<double> read_mnist_images(std::string full_path)
     }
 }
 
-Tensor<double> read_mnist_labels(std::string full_path)
+Tensor<float> read_mnist_labels(std::string full_path)
 {
     auto reverseInt = [](int i) {
         unsigned char c1, c2, c3, c4;
@@ -86,7 +88,7 @@ Tensor<double> read_mnist_labels(std::string full_path)
         for(int i = 0; i < number_of_labels; i++) {
             file.read((char*)&data[i], 1);
         }
-        Tensor<double> out{number_of_labels};
+        Tensor<float> out{number_of_labels};
         for(int i = 0; i < number_of_labels; i++) {
             out(i) = data[i];
         }
@@ -97,59 +99,48 @@ Tensor<double> read_mnist_labels(std::string full_path)
     }
 }
 
-struct MNistModel : public Module<double>
+struct MNistModel : public Module<float>
 {
 
     size_t _image_height;
     size_t _image_width;
 
-    std::shared_ptr<Conv2DModule<double>> conv2d_1;
-    std::shared_ptr<Conv2DModule<double>> conv2d_2;
-    std::shared_ptr<Conv2DModule<double>> conv2d_3;
-    std::shared_ptr<Conv2DModule<double>> conv2d_4;
-    DenseModuleShPtr<double>              dense_1;
+    std::shared_ptr<Conv2DModule<float>> conv2d_1;
+    std::shared_ptr<Conv2DModule<float>> conv2d_2;
+    std::shared_ptr<Conv2DModule<float>> conv2d_3;
+    std::shared_ptr<Conv2DModule<float>> conv2d_4;
+    DenseModuleShPtr<float>              dense_1;
 
     MNistModel(size_t image_height, size_t image_width)
         : _image_height(image_height)
         , _image_width(image_width)
     {
-        conv2d_1 = this->addModule<Conv2DModule>(3, 3, 1, 16);
-        conv2d_2 = this->addModule<Conv2DModule>(3, 3, 16, 32);
-        conv2d_3 = this->addModule<Conv2DModule>(3, 3, 32, 64);
-        dense_1  = addModule<DenseModule>(64 * image_height / 4 * image_width / 4, 10);
+        conv2d_1 = this->addModule<Conv2DModule>(3, 3, 1, 16, "he_normal");
+        conv2d_2 = this->addModule<Conv2DModule>(3, 3, 16, 32, "he_normal");
+        conv2d_3 = this->addModule<Conv2DModule>(3, 3, 32, 64, "he_normal");
+        dense_1  = addModule<DenseModule>(64 * image_height / 4 * image_width / 4, 10, "xavier");
     }
 
-    virtual NodeShPtr<double> callHandler(std::vector<NodeShPtr<double>> inputs) override
+    virtual NodeShPtr<float> callHandler(std::vector<NodeShPtr<float>> inputs) override
     {
 
         auto& images = inputs.at(0);
 
-        // std::cout << "images " << images->shape() << std::endl;
-
         auto layer1 = conv2d_1->call(images);
         layer1      = ReLU(layer1);
-
-        // std::cout << "layer1 " << layer1->shape() << std::endl;
-
         auto layer2 = AveragePooling(layer1, 2, 2);
         layer2      = conv2d_2->call(layer2);
         layer2      = ReLU(layer2);
 
-        // std::cout << "layer2 " << layer2->shape() << std::endl;
-
         auto layer3 = AveragePooling(layer2, 2, 2);
         layer3      = conv2d_3->call(layer3);
         layer3      = ReLU(layer3);
-        // std::cout << "layer3 " << layer3->shape() << std::endl;
 
         layer3 = Flatten(layer3);
-        // std::cout << "layer3 flattened " << layer3->shape() << std::endl;
 
         auto logits = dense_1->call(layer3);
-        // std::cout << "logits " << logits->shape() << std::endl;
 
         auto encoding = SoftMax(logits);
-        // std::cout << "encoding " << encoding->shape() << std::endl;
 
         return encoding;
     }
@@ -174,10 +165,9 @@ int main()
     size_t image_height = train_images.shape(1);
     size_t image_width  = train_images.shape(2);
 
-    size_t            batch_size = 4;
-    NodeShPtr<double> input_images =
-        Node<double>::create({batch_size, image_width, image_height, 1});
-    NodeShPtr<double> input_labels = Node<double>::create({batch_size});
+    size_t           batch_size   = 4;
+    NodeShPtr<float> input_images = Node<float>::create({batch_size, image_width, image_height, 1});
+    NodeShPtr<float> input_labels = Node<float>::create({batch_size});
 
     MNistModel model(image_height, image_width);
 
@@ -189,7 +179,7 @@ int main()
     std::uniform_int_distribution<std::mt19937::result_type> chooser_test(0,
                                                                           test_images.shape(0) - 1);
 
-    SGDOptimizer<double> optimizer(1e-1);
+    SGDOptimizer<float> optimizer(1e-1);
 
     for(size_t step = 0; step < 100000; step++) {
 
@@ -202,7 +192,7 @@ int main()
             input_labels->value(i) = train_labels(random_index);
         }
 
-        NodeShPtr<double> encoding = model.call(input_images, input_labels);
+        NodeShPtr<float> encoding = model.call(input_images, input_labels);
 
         auto loss = SparseCategoricalCrosseEntropy(encoding, input_labels);
 
@@ -213,8 +203,8 @@ int main()
         if(step % 50 == 0) {
             std::cout << "Loss = " << loss->value(0) << std::endl;
 
-            NodeShPtr<double> test_image = Node<double>::create({1, image_width, image_height, 1});
-            NodeShPtr<double> test_label = Node<double>::create({1, 1});
+            NodeShPtr<float> test_image = Node<float>::create({1, image_width, image_height, 1});
+            NodeShPtr<float> test_label = Node<float>::create({1, 1});
 
             auto test_index = chooser_test(rng);
 
@@ -225,7 +215,7 @@ int main()
 
             auto encoding_view = test_encoding->values().viewAs(0, all());
 
-            double max       = 0;
+            float  max       = 0;
             size_t max_index = 0;
             for(size_t i = 0; i < encoding_view.shape(0); i++) {
                 if(max < encoding_view(i)) {

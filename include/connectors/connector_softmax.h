@@ -1,5 +1,6 @@
 #pragma once
 #include "connector.h"
+#include <stdexcept>
 
 namespace snnl
 {
@@ -28,13 +29,27 @@ public:
 
         for(size_t higherDim = 0; higherDim < input_vals.shape(-2); higherDim++) {
             TElem norm = 0;
+            TElem max  = 0;
             for(size_t i = 0; i < input_vals.shape(-1); i++) {
-                norm += exp(input_vals(higherDim, i));
-                // norm += input_vals(higherDim, i);
+                max = std::max(input_vals(higherDim, i), max);
             }
             for(size_t i = 0; i < input_vals.shape(-1); i++) {
-                output_vals(higherDim, i) = exp(input_vals(higherDim, i)) / norm;
-                // output_vals(higherDim, i) = norm;
+                norm += exp(input_vals(higherDim, i) - max);
+            }
+            for(size_t i = 0; i < input_vals.shape(-1); i++) {
+                output_vals(higherDim, i) = exp(input_vals(higherDim, i) - max) / norm;
+                /*
+                if(output_vals(higherDim, i) == 0) {
+                    throw(std::domain_error(
+                        "0 in softmax: val = " + std::to_string(input_vals(higherDim, i)) +
+                        " max = " + std::to_string(max) + " norm = " + std::to_string(norm)));
+                }
+                if(output_vals(higherDim, i) == 1) {
+                    throw(std::domain_error(
+                        "1 in softmax: val = " + std::to_string(input_vals(higherDim, i)) +
+                        " max = " + std::to_string(max) + " norm = " + std::to_string(norm)));
+                }
+                */
             }
         }
     }
@@ -52,21 +67,26 @@ public:
 
         for(size_t higherDim = 0; higherDim < input_vals.shape(-2); higherDim++) {
             TElem norm = 0;
+            TElem max  = 0;
             for(size_t i = 0; i < input_vals.shape(-1); i++) {
-                norm += exp(input_vals(higherDim, i));
+                max = std::max(input_vals(higherDim, i), max);
             }
-            // Surprisingly difficult. There are non-diagonal elements in df_j/dz_i
+            for(size_t i = 0; i < input_vals.shape(-1); i++) {
+                norm += exp(input_vals(higherDim, i) - max);
+            }
+            // Be careful. There are non-diagonal elements in df_j/dz_i
             for(size_t i = 0; i < input_vals.shape(-1); i++) {
                 for(size_t j = 0; j < output_grad.shape(-1); j++) {
                     if(i == j) {
-                        TElem normWithoutXi = norm - exp(input_vals(higherDim, i));
-                        input_grad(higherDim, i) += exp(input_vals(higherDim, i)) * normWithoutXi /
-                                                    (norm * norm) * output_grad(higherDim, j);
+                        TElem normWithoutXi = norm - exp(input_vals(higherDim, i) - max);
+                        input_grad(higherDim, i) += exp(input_vals(higherDim, i) - max) *
+                                                    normWithoutXi / (norm * norm) *
+                                                    output_grad(higherDim, j);
                     }
                     else {
-                        input_grad(higherDim, i) -= exp(input_vals(higherDim, j)) *
-                                                    exp(input_vals(higherDim, i)) / (norm * norm) *
-                                                    output_grad(higherDim, j);
+                        input_grad(higherDim, i) -= exp(input_vals(higherDim, j) - max) *
+                                                    exp(input_vals(higherDim, i) - max) /
+                                                    (norm * norm) * output_grad(higherDim, j);
                     }
                 }
             }

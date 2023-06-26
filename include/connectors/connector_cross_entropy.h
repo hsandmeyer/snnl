@@ -1,5 +1,6 @@
 #pragma once
 #include "connector.h"
+#include <limits>
 
 namespace snnl
 {
@@ -37,7 +38,8 @@ public:
         auto labels        = input_nodes[1]->values().viewWithNDimsOnTheRight(1);
 
         for(size_t i = 0; i < labels.shape(-1); i++) {
-            output_node->value() -= log(distributions(i, labels(i)));
+            output_node->value() -=
+                log(distributions(i, labels(i)) + std::numeric_limits<TElem>::min());
         }
     }
 
@@ -55,7 +57,8 @@ public:
 
         for(size_t i = 0; i < labels_val.shape(-1); i++) {
             distributions_grad(i, labels_val(i)) +=
-                -1 / distributions_val(i, labels_val(i)) * out_grad;
+                -1 / (distributions_val(i, labels_val(i)) + std::numeric_limits<TElem>::min()) *
+                out_grad;
         }
     }
 };

@@ -941,6 +941,13 @@ public:
         uniform(xav_min, xav_max);
     }
 
+    void he_normal(size_t input_units)
+    {
+        TElem mean = 0;
+        TElem var  = sqrt(2. / input_units);
+        normal(mean, var);
+    }
+
     std::vector<TElem>& rawData() { return *_data; }
 
     /*Elementwise modification in place using operation defined by op. If
@@ -1280,6 +1287,15 @@ Tensor<TElemA> elementWiseCombination(const Tensor<TElemA>& a, const Tensor<TEle
             }
         }
         return out;
+    }
+}
+
+inline void checkNan(std::string identifier, const Tensor<float>& t)
+{
+    for(float& val : t) {
+        if(std::isinf(val) || std::isnan(val)) {
+            throw(std::domain_error("Found nan at " + identifier));
+        }
     }
 }
 

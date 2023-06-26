@@ -18,14 +18,15 @@ public:
     size_t _input_units;
     size_t _output_units;
 
-    DenseModule(size_t input_dim, size_t output_dim)
+    DenseModule(size_t input_dim, size_t output_dim, std::string weight_initialization = "xavier")
         : _input_units(input_dim)
         , _output_units(output_dim)
     {
         _W = this->addWeight({_output_units, _input_units});
         _B = this->addWeight({_output_units});
 
-        _W->values().xavier(_input_units, _output_units);
+        init_weight(_W->values(), weight_initialization, _input_units, _output_units);
+
         _B->setAllValues(0);
     }
 

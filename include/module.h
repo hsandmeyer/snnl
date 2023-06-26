@@ -150,4 +150,19 @@ public:
     virtual ~Module() {}
 };
 
+template<typename TElem>
+void init_weight(Tensor<TElem>& t, const std::string& weight_initialization, size_t input_units,
+                 size_t output_units)
+{
+    if(weight_initialization == "he_normal") {
+        t.he_normal(input_units);
+    }
+    else if(weight_initialization == "xavier") {
+        t.xavier(input_units, output_units);
+    }
+    else {
+        throw std::invalid_argument("No such initialization method " + weight_initialization);
+    }
+}
+
 } // namespace snnl
