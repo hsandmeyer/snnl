@@ -1,9 +1,11 @@
 #include "common_modules.h"
 #include "connectors/connector_cross_entropy.h"
 #include "connectors/connector_softmax.h"
+#include "forward_declare.h"
 #include "modules/module_dense.h"
 #include "node.h"
 #include "optimizer.h"
+#include "statistics.h"
 #include "tensor.h"
 #include <cmath>
 #include <fstream>
@@ -165,7 +167,7 @@ int main()
     size_t image_height = train_images.shape(1);
     size_t image_width  = train_images.shape(2);
 
-    size_t           batch_size   = 4;
+    size_t           batch_size   = 32;
     NodeShPtr<float> input_images = Node<float>::create({batch_size, image_width, image_height, 1});
     NodeShPtr<float> input_labels = Node<float>::create({batch_size});
 
@@ -179,7 +181,7 @@ int main()
     std::uniform_int_distribution<std::mt19937::result_type> chooser_test(0,
                                                                           test_images.shape(0) - 1);
 
-    SGDOptimizer<float> optimizer(1e-1);
+    SGDOptimizer<float> optimizer(1e-2);
 
     for(size_t step = 0; step < 100000; step++) {
 
@@ -213,10 +215,14 @@ int main()
 
             auto test_encoding = model.call(test_image);
 
-            auto encoding_view = test_encoding->values().viewAs(0, all());
+            auto   test_encodings = model.call(test_images);
+            double accuracy       = sparseAccuracy(test_encodings, test_labels);
 
-            float  max       = 0;
-            size_t max_index = 0;
+            std::cout << "Accuracy = " << accuracy << std::endl;
+
+            auto   encoding_view = test_encoding->values().viewAs(0, all());
+            float  max           = 0;
+            size_t max_index     = 0;
             for(size_t i = 0; i < encoding_view.shape(0); i++) {
                 if(max < encoding_view(i)) {
                     max_index = i;

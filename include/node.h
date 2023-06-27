@@ -229,6 +229,13 @@ protected:
     {
     }
 
+    Node(Tensor<TElem>& t)
+        : _values(t)
+        , _is_weight(false)
+    {
+        _gradient.setDims(t.shape());
+    }
+
     void backward()
     {
         _backward_calls++;

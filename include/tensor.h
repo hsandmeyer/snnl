@@ -70,6 +70,9 @@ inline NewAxis newAxis()
     return NewAxis();
 }
 
+template<typename TElem>
+class Node;
+
 template<class TElem>
 class Tensor
 {
@@ -439,8 +442,24 @@ public:
         fillDims(shape);
     }
 
-    template<typename TArray>
-    Tensor(const TArray& shape)
+    Tensor(const Index& shape)
+        : _NDims(shape.size())
+        , _rng(time(NULL))
+        , _data(std::make_shared<std::vector<TElem>>())
+    {
+        fillDims(shape);
+    }
+
+    Tensor(const std::vector<size_t>& shape)
+        : _NDims(shape.size())
+        , _rng(time(NULL))
+        , _data(std::make_shared<std::vector<TElem>>())
+    {
+        fillDims(shape);
+    }
+
+    template<size_t N>
+    Tensor(const std::array<size_t, N>& shape)
         : _NDims(shape.size())
         , _rng(time(NULL))
         , _data(std::make_shared<std::vector<TElem>>())
@@ -463,6 +482,11 @@ public:
             out(it.position()) = *it;
         }
         return out;
+    }
+
+    Tensor(std::shared_ptr<Node<TElem>> node)
+        : Tensor(node->values())
+    {
     }
 
     Tensor& operator=(const Tensor& other)
@@ -523,7 +547,7 @@ public:
 
     bool isScalar() const { return _NDims == 0; }
 
-    size_t size() { return NElems(); }
+    size_t size() const { return NElems(); }
 
     Index& shape() { return _shape; }
 

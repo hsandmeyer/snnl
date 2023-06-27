@@ -137,7 +137,16 @@ public:
     template<typename... NodeShPtrs>
     NodeShPtr<TElem> call(const NodeShPtrs&... prev_nodes)
     {
-        return callHandler(std::vector<NodeShPtr<TElem>>{prev_nodes...});
+        std::vector<NodeShPtr<TElem>> nodes;
+        for(auto val : {prev_nodes...}) {
+            if constexpr(std::is_same_v<typeof(val), NodeShPtr<TElem>>) {
+                nodes.emplace_back(val);
+            }
+            else {
+                nodes.emplace_back(Node<TElem>::create(val));
+            }
+        }
+        return callHandler(nodes);
     }
 
     template<template<class> class ChildModule, typename... TArgs>

@@ -2,3 +2,7 @@ build/
 .clangd/
 .cache
 build_clang
+build
+build_debug
+debug
+*ubyte*
