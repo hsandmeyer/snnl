@@ -55,9 +55,9 @@ class Conv2DConnector : public Connector<TElem>
     void forwardHandler(const std::vector<NodeShPtr<TElem>>& input_nodes,
                         Node<TElem>*                         output_node) override
     {
-        Tensor<TElem> out_view = output_node->values().viewWithNDimsOnTheRight(3);
+        Tensor<TElem> out_view = output_node->values().viewWithNDimsOnTheRight(4);
 
-        Tensor<TElem>  input  = input_nodes.at(1)->values().viewWithNDimsOnTheRight(3);
+        Tensor<TElem>  input  = input_nodes.at(1)->values().viewWithNDimsOnTheRight(4);
         Tensor<TElem>& kernel = input_nodes.at(0)->values();
 
         size_t n_input_channels  = input.shape(-1);
@@ -72,29 +72,31 @@ class Conv2DConnector : public Connector<TElem>
         long half_width  = kernel_width / 2;
         long half_height = kernel_height / 2;
 
-        for(long i = 0; i < image_width; i++) {
-            for(long j = 0; j < image_height; j++) {
+        for(size_t higherDim = 0; higherDim < input.shape(0); higherDim++) {
+            for(long i = 0; i < image_width; i++) {
+                for(long j = 0; j < image_height; j++) {
 
-                long i_kernel_begin = std::max(-i, -half_width);
+                    long i_kernel_begin = std::max(-i, -half_width);
 
-                long i_kernel_end = std::min(image_width - i - 1, half_width);
+                    long i_kernel_end = std::min(image_width - i - 1, half_width);
 
-                for(long i_kernel = i_kernel_begin; i_kernel <= i_kernel_end; i_kernel++) {
+                    for(long i_kernel = i_kernel_begin; i_kernel <= i_kernel_end; i_kernel++) {
 
-                    long j_kernel_begin = std::max(-j, -half_height);
+                        long j_kernel_begin = std::max(-j, -half_height);
 
-                    long j_kernel_end = std::min(image_height - j - 1, half_height);
+                        long j_kernel_end = std::min(image_height - j - 1, half_height);
 
-                    for(long j_kernel = j_kernel_begin; j_kernel <= j_kernel_end; j_kernel++) {
+                        for(long j_kernel = j_kernel_begin; j_kernel <= j_kernel_end; j_kernel++) {
 
-                        for(size_t out_chan = 0; out_chan < n_output_channels; out_chan++) {
+                            for(size_t out_chan = 0; out_chan < n_output_channels; out_chan++) {
 
-                            for(size_t in_chan = 0; in_chan < n_input_channels; in_chan++) {
+                                for(size_t in_chan = 0; in_chan < n_input_channels; in_chan++) {
 
-                                out_view(i, j, out_chan) +=
-                                    kernel(i_kernel + half_width, j_kernel + half_height, in_chan,
-                                           out_chan) *
-                                    input(i + i_kernel, j + j_kernel, in_chan);
+                                    out_view(higherDim, i, j, out_chan) +=
+                                        kernel(i_kernel + half_width, j_kernel + half_height,
+                                               in_chan, out_chan) *
+                                        input(higherDim, i + i_kernel, j + j_kernel, in_chan);
+                                }
                             }
                         }
                     }
@@ -106,10 +108,10 @@ class Conv2DConnector : public Connector<TElem>
     void backwardHandler(const Node<TElem>*             output_node,
                          std::vector<NodeShPtr<TElem>>& input_nodes) override
     {
-        Tensor<TElem> out_grad_view = output_node->gradient().viewWithNDimsOnTheRight(3);
+        Tensor<TElem> out_grad_view = output_node->gradient().viewWithNDimsOnTheRight(4);
 
-        Tensor<TElem>  input       = input_nodes.at(1)->values().viewWithNDimsOnTheRight(3);
-        Tensor<TElem>  grad_input  = input_nodes.at(1)->gradient().viewWithNDimsOnTheRight(3);
+        Tensor<TElem>  input       = input_nodes.at(1)->values().viewWithNDimsOnTheRight(4);
+        Tensor<TElem>  grad_input  = input_nodes.at(1)->gradient().viewWithNDimsOnTheRight(4);
         Tensor<TElem>& kernel      = input_nodes.at(0)->values();
         Tensor<TElem>& grad_kernel = input_nodes.at(0)->gradient();
 
@@ -125,35 +127,39 @@ class Conv2DConnector : public Connector<TElem>
         long half_width  = kernel_width / 2;
         long half_height = kernel_height / 2;
 
-        for(long i = 0; i < image_width; i++) {
-            for(long j = 0; j < image_height; j++) {
+        for(size_t higherDim = 0; higherDim < input.shape(0); higherDim++) {
 
-                long i_kernel_begin = std::max(-i, -half_width);
+            for(long i = 0; i < image_width; i++) {
+                for(long j = 0; j < image_height; j++) {
 
-                long i_kernel_end = std::min(image_width - i - 1, half_width);
+                    long i_kernel_begin = std::max(-i, -half_width);
 
-                for(long i_kernel = i_kernel_begin; i_kernel <= i_kernel_end; i_kernel++) {
+                    long i_kernel_end = std::min(image_width - i - 1, half_width);
 
-                    long j_kernel_begin = std::max(-j, -half_height);
+                    for(long i_kernel = i_kernel_begin; i_kernel <= i_kernel_end; i_kernel++) {
 
-                    long j_kernel_end = std::min(image_height - j - 1, half_height);
+                        long j_kernel_begin = std::max(-j, -half_height);
 
-                    for(long j_kernel = j_kernel_begin; j_kernel <= j_kernel_end; j_kernel++) {
+                        long j_kernel_end = std::min(image_height - j - 1, half_height);
 
-                        for(size_t out_chan = 0; out_chan < n_output_channels; out_chan++) {
+                        for(long j_kernel = j_kernel_begin; j_kernel <= j_kernel_end; j_kernel++) {
 
-                            for(size_t in_chan = 0; in_chan < n_input_channels; in_chan++) {
+                            for(size_t out_chan = 0; out_chan < n_output_channels; out_chan++) {
 
-                                TElem out_grad = out_grad_view(i, j, out_chan);
+                                for(size_t in_chan = 0; in_chan < n_input_channels; in_chan++) {
 
-                                grad_kernel(i_kernel + half_width, j_kernel + half_height, in_chan,
-                                            out_chan) +=
-                                    input(i + i_kernel, j + j_kernel, in_chan) * out_grad;
+                                    TElem out_grad = out_grad_view(higherDim, i, j, out_chan);
 
-                                grad_input(i + i_kernel, j + j_kernel, in_chan) +=
-                                    kernel(i_kernel + half_width, j_kernel + half_height, in_chan,
-                                           out_chan) *
-                                    out_grad;
+                                    grad_kernel(i_kernel + half_width, j_kernel + half_height,
+                                                in_chan, out_chan) +=
+                                        input(higherDim, i + i_kernel, j + j_kernel, in_chan) *
+                                        out_grad;
+
+                                    grad_input(higherDim, i + i_kernel, j + j_kernel, in_chan) +=
+                                        kernel(i_kernel + half_width, j_kernel + half_height,
+                                               in_chan, out_chan) *
+                                        out_grad;
+                                }
                             }
                         }
                     }

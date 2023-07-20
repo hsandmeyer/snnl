@@ -77,8 +77,7 @@ public:
         auto& grad_b = input_nodes.back()->gradient();
 
         if(val_a.NDims() > val_b.NDims()) {
-            Tensor<TElem> grad_out_view =
-                output_node->gradient().viewFromIndices({-val_b.NDims()});
+            Tensor<TElem> grad_out_view = output_node->gradient().viewFromIndices({-val_b.NDims()});
 
             Tensor<TElem> a_val_view = val_a.viewFromIndices({-val_b.NDims()});
             Tensor<TElem> b_val_view = val_b.viewWithNDimsOnTheLeft(1);
@@ -97,8 +96,7 @@ public:
             }
         }
         else {
-            Tensor<TElem> grad_out_view =
-                output_node->gradient().viewFromIndices({-val_a.NDims()});
+            Tensor<TElem> grad_out_view = output_node->gradient().viewFromIndices({-val_a.NDims()});
 
             Tensor<TElem> b_val_view = val_b.viewFromIndices({-val_a.NDims()});
             Tensor<TElem> a_val_view = val_a.viewWithNDimsOnTheLeft(1);

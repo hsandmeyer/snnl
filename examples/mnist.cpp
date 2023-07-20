@@ -181,7 +181,8 @@ int main()
     std::uniform_int_distribution<std::mt19937::result_type> chooser_test(0,
                                                                           test_images.shape(0) - 1);
 
-    SGDOptimizer<float> optimizer(1e-2);
+    // SGDOptimizer<float> optimizer(1e-2);
+    AdamOptimizer<float> optimizer;
 
     for(size_t step = 0; step < 100000; step++) {
 

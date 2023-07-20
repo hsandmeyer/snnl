@@ -7,6 +7,7 @@
 #include <set>
 #include <stdexcept>
 #include <sys/types.h>
+#include <type_traits>
 #include <vector>
 
 namespace snnl
@@ -134,16 +135,23 @@ public:
 
     const std::set<NodeShPtr<TElem>>& weights() { return _weights; }
 
+    NodeShPtr<TElem> call(std::vector<NodeShPtr<TElem>> prev_nodes)
+    {
+        return callHandler(prev_nodes);
+    }
+
     template<typename... NodeShPtrs>
     NodeShPtr<TElem> call(const NodeShPtrs&... prev_nodes)
     {
         std::vector<NodeShPtr<TElem>> nodes;
         for(auto val : {prev_nodes...}) {
-            if constexpr(std::is_same_v<typeof(val), NodeShPtr<TElem>>) {
-                nodes.emplace_back(val);
+            if constexpr(std::is_same_v<typename std::remove_reference<typeof(val)>::type,
+                                        Tensor<TElem>>)
+            {
+                nodes.emplace_back(Node<TElem>::create(val));
             }
             else {
-                nodes.emplace_back(Node<TElem>::create(val));
+                nodes.push_back(val);
             }
         }
         return callHandler(nodes);

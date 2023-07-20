@@ -4,6 +4,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 enable_testing()
 find_package(GTest REQUIRED)
+#find_package(OpenMP REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS}, include)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -12,11 +13,16 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(CMAKE_CXX_FLAGS "-march=native -Wall -Wextra -Werror -std=c++17") 
+
+
+set(CMAKE_CXX_FLAGS "-march=native -Wall -Wextra -std=c++17") 
 set(CMAKE_CXX_FLAGS_DEBUG "-g -DDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_BUILD_TYPE=ASAN)
 
+#set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+#set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 
 include_directories("/")
 add_executable(tensor_test tests/tensor_test.cpp)

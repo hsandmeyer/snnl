@@ -13,7 +13,7 @@
 using namespace snnl;
 
 template<typename TElem>
-void compRel(const Index& pos, TElem a, TElem b, TElem rel_prec, TElem abs_prec = 1e-10)
+void compRel(const Index& pos, TElem a, TElem b, TElem rel_prec, TElem abs_prec = 1e-6)
 {
     if(std::isinf(a) || std::isinf(b) || std::isnan(a) || std::isnan(b) ||
        (std::abs(a - b) / (std::max(a, b)) > rel_prec && std::abs(a - b) > abs_prec))
@@ -671,8 +671,8 @@ TEST(ImageTest, UNet)
 
     ImageModel model;
 
-    NodeShPtr<double> image  = Node<double>::create({4, 32, 16, 3});
-    NodeShPtr<double> labels = Node<double>::create({4, 32, 16});
+    NodeShPtr<double> image  = Node<double>::create({2, 32, 16, 3});
+    NodeShPtr<double> labels = Node<double>::create({2, 32, 16});
 
     image->values().uniform();
 

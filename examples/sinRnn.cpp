@@ -8,7 +8,8 @@
 
 using namespace snnl;
 
-struct SinRNNModel : public Module<float> {
+struct SinRNNModel : public Module<float>
+{
     SimpleRNNModuleShPtr<float> rnn1;
     DenseModuleShPtr<float>     dense1;
 
@@ -20,8 +21,7 @@ struct SinRNNModel : public Module<float> {
         dense1 = addModule<DenseModule>(32, 1);
     }
 
-    virtual NodeShPtr<float>
-    callHandler(std::vector<NodeShPtr<float>> input) override
+    virtual NodeShPtr<float> callHandler(std::vector<NodeShPtr<float>> input) override
     {
         NodeShPtr<float> out = rnn1->call(input);
         out                  = Sigmoid(out);
@@ -36,7 +36,7 @@ struct SinRNNModel : public Module<float> {
 
 int main()
 {
-    size_t           batch_size = 4;
+    size_t           batch_size = 32;
     NodeShPtr<float> step       = Node<float>::create({batch_size, 1});
     NodeShPtr<float> x          = Node<float>::create({batch_size, 1});
     NodeShPtr<float> input      = Node<float>::create({batch_size, 2});
@@ -47,8 +47,9 @@ int main()
     SinRNNModel model;
 
     SGDOptimizer<float> optimizer(1e-2);
+    // AdamOptimizer<float> optimizer;
 
-    for (size_t i = 0; i < 1000000; i++) {
+    for(size_t i = 0; i < 1000000; i++) {
         step->values().uniform(0.5, 1.5);
 
         x = Add(x, step);
@@ -66,17 +67,16 @@ int main()
 
         optimizer.optimizeStep(loss);
 
-        if (i % 500 == 0) {
+        if(i % 500 == 0) {
             std::cout << "Loss = " << loss->value(0) << std::endl;
-            std::cout << "Diff =\n"
-                      << out->values() - sin->values() << " " << std::endl;
+            std::cout << "Diff =\n" << out->values() - sin->values() << " " << std::endl;
 
             auto x_fut = x;
 
             std::ofstream fout("test.txt");
             model.preserveState();
 
-            for (size_t future = 0; future < 100; future++) {
+            for(size_t future = 0; future < 100; future++) {
                 step->values().uniform(0.5, 1.5);
                 x_fut = Add(x_fut, step);
 
@@ -85,10 +85,9 @@ int main()
                 sin = Sin(x_fut);
                 out = model.call(input);
 
-                for (size_t batch = 0; batch < batch_size; batch++) {
-                    fout << Subtract(x_fut, x)->value(batch, 0) << " "
-                         << out->value(batch, 0) << " " << sin->value(batch, 0)
-                         << " ";
+                for(size_t batch = 0; batch < batch_size; batch++) {
+                    fout << Subtract(x_fut, x)->value(batch, 0) << " " << out->value(batch, 0)
+                         << " " << sin->value(batch, 0) << " ";
                 }
                 fout << std::endl;
             }

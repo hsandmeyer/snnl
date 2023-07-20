@@ -25,14 +25,15 @@ public:
         : _input_units(input_dim)
         , _output_units(output_dim)
     {
-        _W_h    = this->addWeight({_output_units, _output_units});
-        _W_x    = this->addWeight({_input_units, _output_units});
-        _B      = this->addWeight({_output_units});
-        _h_prev = this->addWeight({_output_units});
+        _W_h = this->addWeight({_output_units, _output_units});
+        _W_x = this->addWeight({_input_units, _output_units});
+        _B   = this->addWeight({_output_units});
 
         _W_x->values().xavier(_input_units, _output_units);
         _W_h->setAllValues(0);
         _B->setAllValues(0);
+
+        _h_prev = Node<TElem>::create({_output_units});
         _h_prev->setAllValues(0);
     }
 

@@ -33,11 +33,12 @@ struct SinModel : public Module<float>
 
 int main()
 {
-    size_t           batch_size = 4;
+    size_t           batch_size = 32;
     NodeShPtr<float> input      = Node<float>::create({batch_size, 1});
     SinModel         model;
 
-    SGDOptimizer<float> optimizer(1e-1);
+    // SGDOptimizer<float> optimizer(1e-2);
+    AdamOptimizer<float> optimizer;
 
     for(size_t step = 0; step < 100000; step++) {
         input->values().uniform(-M_PI, M_PI);
