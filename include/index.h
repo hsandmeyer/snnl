@@ -114,6 +114,21 @@ public:
 
     long NDims() const { return _shape.size(); }
 
+    Index copyNDims(size_t NDims)
+    {
+        Index out(NDims);
+
+        for(size_t i = 0; i < out.size(); i++) {
+            if(i < size()) {
+                out[i] = _shape[i];
+            }
+            else {
+                out[i] = 1;
+            }
+        }
+        return out;
+    }
+
     bool operator!=(const Index& b) const { return _shape != b._shape; }
 
     bool operator==(const Index& b) const { return _shape == b._shape; }

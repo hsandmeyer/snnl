@@ -899,6 +899,32 @@ TEST(InputOutputTest, BMPTest)
     b.saveToBMP("test2.bmp", -1, 1);
 }
 
+TEST(MathTest, ArgMax)
+{
+    Tensor<float> a{2, 4};
+    a.setFlattenedValues({0, 1, 2, 1, 1, 0, 4, 9});
+    auto res = a.argMax();
+
+    EXPECT_EQ(res(0), 2);
+    EXPECT_EQ(res(1), 3);
+
+    res = a.argMax(0);
+
+    EXPECT_EQ(res(0), 1);
+    EXPECT_EQ(res(1), 0);
+    EXPECT_EQ(res(2), 1);
+    EXPECT_EQ(res(2), 1);
+
+    a = Tensor<float>{2, 2, 2};
+    a.setFlattenedValues({0, 1, 2, 1, 1, 0, 4, 9});
+    res = a.argMax(1);
+
+    EXPECT_EQ(res(0, 0), 1);
+    EXPECT_EQ(res(0, 1), 0);
+    EXPECT_EQ(res(1, 0), 1);
+    EXPECT_EQ(res(1, 1), 1);
+}
+
 int main(int argc, char** argv)
 {
     ::testing::InitGoogleTest(&argc, argv);

@@ -11,19 +11,11 @@ double sparseAccuracy(const Tensor<TElem>& encodings, const Tensor<TElem>& label
 
     auto label_view = labels.flatten();
 
-    auto encoding_view = encodings.viewWithNDimsOnTheRight(2);
+    auto encoding_results = encodings.viewWithNDimsOnTheRight(2).argMax();
 
     double accuracy = 0;
     for(size_t i = 0; i < labels.shape(-1); i++) {
-        TElem  max     = encoding_view(i, 0);
-        size_t encoded = 0;
-        for(size_t j = 1; j < encoding_view.shape(-1); j++) {
-            if(encoding_view(i, j) > max) {
-                encoded = j;
-                max     = encoding_view(i, j);
-            }
-        }
-        if(encoded == size_t(label_view(i))) {
+        if(encoding_results(i) == size_t(label_view(i))) {
             accuracy++;
         }
     }

@@ -195,9 +195,9 @@ int main()
             input_labels->value(i) = train_labels(random_index);
         }
 
-        NodeShPtr<float> encoding = model.call(input_images, input_labels);
+        NodeShPtr<float> predicted_encodings = model.call(input_images, input_labels);
 
-        auto loss = SparseCategoricalCrosseEntropy(encoding, input_labels);
+        auto loss = SparseCategoricalCrosseEntropy(predicted_encodings, input_labels);
 
         loss->computeGrad();
 
@@ -206,37 +206,32 @@ int main()
         if(step % 50 == 0) {
             std::cout << "Loss = " << loss->value(0) << std::endl;
 
-            NodeShPtr<float> test_image = Node<float>::create({1, image_width, image_height, 1});
-            NodeShPtr<float> test_label = Node<float>::create({1, 1});
-
-            auto test_index = chooser_test(rng);
-
-            test_image->values().viewAs(0, ellipsis()) = test_images.viewAs(test_index, ellipsis());
-            test_label->value(0, 0)                    = test_labels(test_index);
-
-            auto test_encoding = model.call(test_image);
-
             auto   test_encodings = model.call(test_images);
-            double accuracy       = sparseAccuracy(test_encodings, test_labels);
+            double test_accuracy  = sparseAccuracy(test_encodings, test_labels);
+            std::cout << "Test accuracy = " << test_accuracy << std::endl;
 
-            std::cout << "Accuracy = " << accuracy << std::endl;
+            auto   train_encodings = model.call(train_images);
+            double train_accuracy  = sparseAccuracy(train_encodings, train_labels);
+            std::cout << "Training accuracy = " << train_accuracy << std::endl;
 
-            auto   encoding_view = test_encoding->values().viewAs(0, all());
-            float  max           = 0;
-            size_t max_index     = 0;
-            for(size_t i = 0; i < encoding_view.shape(0); i++) {
-                if(max < encoding_view(i)) {
-                    max_index = i;
-                    max       = encoding_view(i);
-                }
-            }
+            NodeShPtr<float> single_image = Node<float>::create({1, image_width, image_height, 1});
+            NodeShPtr<float> single_label = Node<float>::create({1, 1});
 
-            std::cout << "Correct label\t= " << test_label->value(0)
-                      << "\nChosen \t\t= " << max_index << " with "
-                      << test_encoding->value(max_index)
-                      << "\nEncoding = " << test_encoding->values() << std::endl;
-            if(size_t(test_label->value(0)) != max_index) {
-                test_image->values().saveToBMP(std::to_string(max_index) + ".bmp", 0, 1);
+            auto image_index = chooser_test(rng);
+
+            single_image->values().viewAs(0, ellipsis()) =
+                test_images.viewAs(image_index, ellipsis());
+            single_label->value(0, 0) = test_labels(image_index);
+
+            auto   single_encoding = model.call(single_image);
+            size_t predicted       = single_encoding->values().argMax()(0);
+
+            std::cout << "Correct label\t= " << single_label->value(0)
+                      << "\nChosen \t\t= " << predicted << " with "
+                      << single_encoding->value(predicted)
+                      << "\nEncoding = " << single_encoding->values() << std::endl;
+            if(size_t(single_label->value(0)) != predicted) {
+                single_image->values().saveToBMP(std::to_string(predicted) + ".bmp", 0, 1);
             }
 
             model.saveToFile("mnist.snnl");

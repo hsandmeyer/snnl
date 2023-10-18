@@ -1176,6 +1176,46 @@ public:
         });
     }
 
+    Tensor<size_t> argMax(long axis = -1)
+    {
+
+        if(axis < 0) {
+            axis += NDims();
+        }
+
+        Index  out_shape(_shape.size() - 1);
+        size_t out_index = 0;
+        for(long i = 0; i < long(_shape.size()); i++) {
+            if(i == axis) {
+                continue;
+            }
+            out_shape[out_index] = _shape[i];
+            ++out_index;
+        }
+
+        Tensor<size_t> out(out_shape);
+
+        auto my_view  = viewFromIndices({axis, axis + 1});
+        auto out_view = out.viewFromIndices({axis});
+
+        for(size_t i = 0; i < my_view.shape(0); i++) {
+            for(size_t j = 0; j < my_view.shape(2); j++) {
+                TElem  max       = my_view(i, 0, j);
+                size_t max_index = 0;
+
+                for(size_t k = 1; k < my_view.shape(1); k++) {
+
+                    if(TElem val = my_view(i, k, j); val > max) {
+                        max_index = k;
+                        max       = val;
+                    }
+                }
+                out_view(i, j) = max_index;
+            }
+        }
+        return out;
+    }
+
     std::vector<uint8_t> toByteArray() const
     {
         if(_is_partial_view) {
