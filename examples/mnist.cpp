@@ -1,3 +1,4 @@
+#include "batch_generator.h"
 #include "common_modules.h"
 #include "connectors/connector_cross_entropy.h"
 #include "connectors/connector_softmax.h"
@@ -167,74 +168,64 @@ int main()
     size_t image_height = train_images.shape(1);
     size_t image_width  = train_images.shape(2);
 
-    size_t           batch_size   = 32;
-    NodeShPtr<float> input_images = Node<float>::create({batch_size, image_width, image_height, 1});
-    NodeShPtr<float> input_labels = Node<float>::create({batch_size});
+    size_t batch_size = 32;
+    size_t epoch_size = 2048;
 
     MNistModel model(image_height, image_width);
 
-    std::random_device dev;
-    std::mt19937       rng(dev());
-
-    std::uniform_int_distribution<std::mt19937::result_type> chooser_train(
-        0, train_images.shape(0) - 1);
-    std::uniform_int_distribution<std::mt19937::result_type> chooser_test(0,
-                                                                          test_images.shape(0) - 1);
-
-    // SGDOptimizer<float> optimizer(1e-2);
     AdamOptimizer<float> optimizer;
+
+    BatchGenerator train_generator(train_images, train_labels);
+    BatchGenerator test_generator(test_images, test_labels);
+    test_generator.mute();
+
+    float loss_sum = 0;
+
+    train_generator.setEpochSize(epoch_size);
+    train_generator.setEpochCallBack([&](size_t epoch) {
+        std::cout << "Epoch " << epoch << std::endl;
+        std::cout << "Mean loss = " << loss_sum / epoch_size << std::endl;
+
+        auto [single_image, single_label] = test_generator.generateBatch(1);
+
+        auto   single_encoding = model.call(single_image);
+        size_t predicted       = single_encoding->values().argMax()(0);
+
+        std::cout << "Random example:" << std::endl
+                  << "Correct label = " << single_label->value(0) << std::endl
+                  << "Chosen        = " << predicted << " with "
+                  << single_encoding->value(predicted) << std::endl
+                  << "Encoding      = " << single_encoding->values() << std::endl;
+
+        if(epoch >= 3 && size_t(single_label->value(0)) != predicted) {
+            // Save wrong classifications
+            single_image->values().saveToBMP(std::to_string(predicted) + ".bmp", 0, 1);
+        }
+
+        auto   test_encodings = model.call(test_images);
+        double test_accuracy  = sparseAccuracy(test_encodings, test_labels);
+        std::cout << "Test accuracy = " << test_accuracy << std::endl;
+
+        // auto   train_encodings = model.call(train_images);
+        // double train_accuracy  = sparseAccuracy(train_encodings, train_labels);
+        // std::cout << "Training accuracy = " << train_accuracy << std::endl;
+
+        model.saveToFile("mnist.snnl");
+        loss_sum = 0;
+    });
 
     for(size_t step = 0; step < 100000; step++) {
 
-        for(size_t i = 0; i < batch_size; i++) {
-            auto random_index = chooser_train(rng);
-
-            input_images->values().viewAs(i, ellipsis()) =
-                train_images.viewAs(random_index, ellipsis());
-
-            input_labels->value(i) = train_labels(random_index);
-        }
+        auto [input_images, input_labels] = train_generator.generateBatch(batch_size);
 
         NodeShPtr<float> predicted_encodings = model.call(input_images, input_labels);
 
         auto loss = SparseCategoricalCrosseEntropy(predicted_encodings, input_labels);
 
+        loss_sum += loss->value();
+
         loss->computeGrad();
 
         optimizer.optimizeStep(loss);
-
-        if(step % 50 == 0) {
-            std::cout << "Loss = " << loss->value(0) << std::endl;
-
-            auto   test_encodings = model.call(test_images);
-            double test_accuracy  = sparseAccuracy(test_encodings, test_labels);
-            std::cout << "Test accuracy = " << test_accuracy << std::endl;
-
-            auto   train_encodings = model.call(train_images);
-            double train_accuracy  = sparseAccuracy(train_encodings, train_labels);
-            std::cout << "Training accuracy = " << train_accuracy << std::endl;
-
-            NodeShPtr<float> single_image = Node<float>::create({1, image_width, image_height, 1});
-            NodeShPtr<float> single_label = Node<float>::create({1, 1});
-
-            auto image_index = chooser_test(rng);
-
-            single_image->values().viewAs(0, ellipsis()) =
-                test_images.viewAs(image_index, ellipsis());
-            single_label->value(0, 0) = test_labels(image_index);
-
-            auto   single_encoding = model.call(single_image);
-            size_t predicted       = single_encoding->values().argMax()(0);
-
-            std::cout << "Correct label\t= " << single_label->value(0)
-                      << "\nChosen \t\t= " << predicted << " with "
-                      << single_encoding->value(predicted)
-                      << "\nEncoding = " << single_encoding->values() << std::endl;
-            if(size_t(single_label->value(0)) != predicted) {
-                single_image->values().saveToBMP(std::to_string(predicted) + ".bmp", 0, 1);
-            }
-
-            model.saveToFile("mnist.snnl");
-        }
     }
 }

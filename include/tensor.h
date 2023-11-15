@@ -151,7 +151,7 @@ class Tensor
     size_t dataOffset(size_t j) const { return j * _strides[NDims() - 1] + _mem_offset; }
 
     // For scalar
-    size_t dataOffset() const { return 0; }
+    size_t dataOffset() const { return _mem_offset; }
 
     void stream(Index& ind, long dim, std::ostream& o) const
     {
@@ -249,7 +249,7 @@ class Tensor
 #endif
         if(NDims() == 0 && index_vec.size() > 0) {
             // For iterators of scalars, which need to have a size. Otherwise there is no end()
-            return index_vec[0];
+            return index_vec[0] + _mem_offset;
         }
         size_t index = _mem_offset;
         // Backwards, because we allow less indexes than NDims.
@@ -378,6 +378,7 @@ class Tensor
 public:
     typedef typename std::vector<TElem>::iterator       iterator;
     typedef typename std::vector<TElem>::const_iterator const_iterator;
+    using type = TElem;
 
     class Iterator
     {
